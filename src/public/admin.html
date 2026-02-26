@@ -3,105 +3,122 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Admin Dashboard - Crypto Invoice</title>
+    <title>Console Admin Pagamenti</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="page fade-in">
-      <section class="stripe-shell">
-        <header class="stripe-top">
-          <div class="top-eyebrow">Pannello Operativo</div>
-          <h1>Payments Admin</h1>
-          <p class="top-sub">
-            Crea fatture in USD, invia link al cliente e monitora conferme blockchain in tempo reale.
-          </p>
-          <div class="hero-row">
-            <span class="pill">USDT TRC20</span>
-            <span class="pill">BTC</span>
-            <span class="pill">ETH</span>
-            <span class="pill">Webhook + Verifica on-chain</span>
+    <main class="app fade-in">
+      <header class="hero">
+        <div class="hero-head">
+          <div>
+            <span class="eyebrow">Payments OS</span>
+            <h1>Premium Admin Console</h1>
+            <p>
+              Crea fatture in USD, monitora gli stati in tempo reale e gestisci verifiche blockchain da un unico
+              pannello rapido.
+            </p>
           </div>
-        </header>
-
-        <div class="shell-body">
-          <div class="layout-two">
-            <section class="panel">
-              <h3 class="panel-title">Crea Nuova Fattura</h3>
-              <p class="panel-note">
-                L'importo è sempre in USD. Il sistema genera importi crypto e link pagamento univoco.
-              </p>
-
-              <div class="field">
-                <label for="apiKey">API Key admin</label>
-                <input id="apiKey" type="password" placeholder="Inserisci x-api-key" autocomplete="off" />
-              </div>
-
-              <div class="field">
-                <label for="amountUsd">Importo USD</label>
-                <input id="amountUsd" type="number" min="0.01" step="0.01" value="100.00" />
-              </div>
-
-              <div class="field">
-                <label for="telegramUserId">Telegram User ID cliente (opzionale)</label>
-                <input id="telegramUserId" type="text" placeholder="es. 123456789" />
-              </div>
-
-              <div class="field">
-                <label>Valute abilitate</label>
-                <div class="currency-checks">
-                  <label><input type="checkbox" value="USDT" checked /> USDT</label>
-                  <label><input type="checkbox" value="BTC" checked /> BTC</label>
-                  <label><input type="checkbox" value="ETH" checked /> ETH</label>
-                </div>
-              </div>
-
-              <div class="actions">
-                <button id="createBtn" class="btn-primary" type="button">Crea fattura</button>
-              </div>
-
-              <div id="createResult" class="result-box hidden"></div>
-            </section>
-
-            <section class="panel">
-              <h3 class="panel-title">Gestione Fattura</h3>
-              <p class="panel-note">
-                Controlla stato, marca manualmente pagamenti o forzi la verifica on-chain immediata.
-              </p>
-
-              <div class="field">
-                <label for="invoiceId">Invoice ID</label>
-                <input id="invoiceId" type="text" placeholder="UUID fattura" />
-              </div>
-
-              <div class="field">
-                <label for="paidCurrency">Valuta pagata</label>
-                <select id="paidCurrency">
-                  <option value="USDT">USDT</option>
-                  <option value="BTC">BTC</option>
-                  <option value="ETH">ETH</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="txHash">TX hash (opzionale)</label>
-                <input id="txHash" type="text" placeholder="Hash transazione" />
-              </div>
-
-              <div class="actions">
-                <button id="statusBtn" class="btn-secondary" type="button">Controlla stato</button>
-                <button id="markPaidBtn" class="btn-primary" type="button">Segna come pagata</button>
-                <button id="verifyNowBtn" class="btn-ghost" type="button">Verifica on-chain ora</button>
-              </div>
-
-              <div id="manageResult" class="result-box hidden"></div>
-            </section>
+          <div class="hero-side">
+            <span class="chip">Live Control</span>
+            <small>API sicura + monitor on-chain</small>
           </div>
+        </div>
+        <div class="hero-chips">
+          <span class="chip">USDT TRC20</span>
+          <span class="chip">BTC</span>
+          <span class="chip">ETH</span>
+          <span class="chip">Telegram Bot</span>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="grid-2">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Nuova fattura</h3>
+                <p>Inserisci i dati minimi e genera subito un link pagamento.</p>
+              </div>
+              <span class="pill">Step 1</span>
+            </div>
+
+            <div class="field">
+              <label for="apiKey">API Key admin</label>
+              <input id="apiKey" type="password" placeholder="Inserisci x-api-key" autocomplete="off" />
+            </div>
+
+            <div class="field">
+              <label for="amountUsd">Importo in USD</label>
+              <input id="amountUsd" type="text" inputmode="decimal" value="100.00" placeholder="es. 150.50" />
+            </div>
+
+            <div class="field">
+              <label for="telegramUserId">Telegram User ID cliente (opzionale)</label>
+              <input id="telegramUserId" type="text" placeholder="es. 123456789" />
+            </div>
+
+            <div class="field">
+              <label>Valute abilitate</label>
+              <div class="currency-checks">
+                <label><input type="checkbox" value="USDT" checked /> USDT</label>
+                <label><input type="checkbox" value="BTC" checked /> BTC</label>
+                <label><input type="checkbox" value="ETH" checked /> ETH</label>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="createBtn" class="btn-primary" type="button">Crea fattura</button>
+            </div>
+
+            <div id="createResult" class="result-box hidden"></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Gestione rapida</h3>
+                <p>Controlla stato, marca pagata, avvia verifica e pulizia massiva.</p>
+              </div>
+              <span class="pill">Step 2</span>
+            </div>
+
+            <div class="field">
+              <label for="invoiceId">Invoice ID</label>
+              <input id="invoiceId" type="text" placeholder="UUID fattura" />
+            </div>
+
+            <div class="field">
+              <label for="paidCurrency">Valuta pagata</label>
+              <select id="paidCurrency">
+                <option value="USDT">USDT</option>
+                <option value="BTC">BTC</option>
+                <option value="ETH">ETH</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="txHash">TX hash (opzionale)</label>
+              <input id="txHash" type="text" placeholder="Hash transazione" />
+            </div>
+
+            <div class="actions">
+              <button id="statusBtn" class="btn-secondary" type="button">Stato</button>
+              <button id="markPaidBtn" class="btn-primary" type="button">Segna pagata</button>
+              <button id="verifyNowBtn" class="btn-ghost" type="button">Verifica ora</button>
+            </div>
+
+            <div class="actions">
+              <button id="deleteAllBtn" class="btn-danger" type="button">Elimina tutte</button>
+            </div>
+
+            <div id="manageResult" class="result-box hidden"></div>
+          </article>
         </div>
       </section>
     </main>
@@ -112,6 +129,7 @@
         statusBtn: document.getElementById("statusBtn"),
         markPaidBtn: document.getElementById("markPaidBtn"),
         verifyNowBtn: document.getElementById("verifyNowBtn"),
+        deleteAllBtn: document.getElementById("deleteAllBtn"),
       };
 
       function getApiKey() {
@@ -137,16 +155,52 @@
           button.dataset.originalText = button.textContent;
           button.textContent = busyText;
           button.disabled = true;
-        } else {
-          button.textContent = button.dataset.originalText || button.textContent;
-          button.disabled = false;
+          return;
         }
+        button.textContent = button.dataset.originalText || button.textContent;
+        button.disabled = false;
+      }
+
+      function normalizeAmount(rawValue) {
+        return Number(String(rawValue || "").trim().replace(",", "."));
+      }
+
+      function ensureApiKey(resultId) {
+        if (getApiKey()) {
+          return true;
+        }
+        setResult(resultId, "Inserisci prima la API key admin.", true);
+        return false;
+      }
+
+      async function parseJsonResponse(response) {
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (_error) {
+          data = {};
+        }
+
+        if (!response.ok) {
+          throw new Error(data.message || `Errore HTTP ${response.status}`);
+        }
+
+        return data;
       }
 
       async function createInvoice() {
-        const amountUsd = Number(document.getElementById("amountUsd").value);
+        if (!ensureApiKey("createResult")) {
+          return;
+        }
+
+        const amountUsd = normalizeAmount(document.getElementById("amountUsd").value);
         const telegramUserId = document.getElementById("telegramUserId").value.trim();
         const allowedCurrencies = selectedCurrencies();
+
+        if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+          setResult("createResult", "Importo USD non valido.", true);
+          return;
+        }
 
         if (!allowedCurrencies.length) {
           setResult("createResult", "Seleziona almeno una valuta.", true);
@@ -168,15 +222,11 @@
             }),
           });
 
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.message || "Errore creazione fattura");
-          }
-
+          const data = await parseJsonResponse(response);
           const invoice = data.invoice;
           setResult(
             "createResult",
-            `Fattura creata con successo\nID: ${invoice.id}\nScadenza: ${new Date(invoice.expiresAt).toLocaleString("it-IT")}\nLink: ${invoice.paymentUrl}`,
+            `Fattura creata\nID: ${invoice.id}\nScadenza: ${new Date(invoice.expiresAt).toLocaleString("it-IT")}\nLink: ${invoice.paymentUrl}`,
           );
           document.getElementById("invoiceId").value = invoice.id;
         } finally {
@@ -185,6 +235,10 @@
       }
 
       async function checkStatus() {
+        if (!ensureApiKey("manageResult")) {
+          return;
+        }
+
         const invoiceId = document.getElementById("invoiceId").value.trim();
         if (!invoiceId) {
           setResult("manageResult", "Inserisci Invoice ID.", true);
@@ -198,11 +252,8 @@
               "x-api-key": getApiKey(),
             },
           });
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.message || "Errore stato fattura");
-          }
 
+          const data = await parseJsonResponse(response);
           const status = data.status;
           setResult(
             "manageResult",
@@ -214,6 +265,10 @@
       }
 
       async function markPaid() {
+        if (!ensureApiKey("manageResult")) {
+          return;
+        }
+
         const invoiceId = document.getElementById("invoiceId").value.trim();
         if (!invoiceId) {
           setResult("manageResult", "Inserisci Invoice ID.", true);
@@ -234,11 +289,8 @@
               confirmations: 1,
             }),
           });
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.message || "Errore conferma pagamento");
-          }
 
+          const data = await parseJsonResponse(response);
           if (data.changed) {
             setResult(
               "manageResult",
@@ -256,6 +308,10 @@
       }
 
       async function verifyNow() {
+        if (!ensureApiKey("manageResult")) {
+          return;
+        }
+
         setBusy(controls.verifyNowBtn, true, "Verifico...");
         try {
           const response = await fetch("/api/payments/verify-now", {
@@ -264,16 +320,49 @@
               "x-api-key": getApiKey(),
             },
           });
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.message || "Errore verifica on-chain");
-          }
+
+          const data = await parseJsonResponse(response);
           setResult(
             "manageResult",
             `Verifica completata\nControllate: ${data.summary.checked}\nPagate: ${data.summary.paid}\nErrori: ${data.summary.errors.length}`,
           );
         } finally {
           setBusy(controls.verifyNowBtn, false);
+        }
+      }
+
+      async function deleteAllInvoices() {
+        if (!ensureApiKey("manageResult")) {
+          return;
+        }
+
+        const confirmed = window.confirm(
+          "Sei sicuro di eliminare TUTTE le fatture? Questa azione non puo essere annullata.",
+        );
+        if (!confirmed) {
+          return;
+        }
+
+        setBusy(controls.deleteAllBtn, true, "Elimino...");
+        try {
+          const response = await fetch("/api/invoices/delete-all", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": getApiKey(),
+            },
+            body: JSON.stringify({
+              confirm: "DELETE_ALL",
+            }),
+          });
+
+          const data = await parseJsonResponse(response);
+          setResult(
+            "manageResult",
+            `Eliminazione completata\nInvoice eliminate: ${data.summary.deletedInvoices}\nPagamenti eliminati: ${data.summary.deletedPayments}`,
+          );
+        } finally {
+          setBusy(controls.deleteAllBtn, false);
         }
       }
 
@@ -304,6 +393,14 @@
       controls.verifyNowBtn.addEventListener("click", async () => {
         try {
           await verifyNow();
+        } catch (error) {
+          setResult("manageResult", error.message, true);
+        }
+      });
+
+      controls.deleteAllBtn.addEventListener("click", async () => {
+        try {
+          await deleteAllInvoices();
         } catch (error) {
           setResult("manageResult", error.message, true);
         }

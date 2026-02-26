@@ -128,7 +128,7 @@ function parseNewInvoiceArgs(text) {
     );
   }
 
-  const amountUsd = Number(parts[1]);
+  const amountUsd = Number(String(parts[1]).replace(",", "."));
   if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
     throw new Error("Importo USD non valido");
   }
@@ -320,8 +320,12 @@ async function handleNewInvoiceCommand(message) {
     return;
   }
 
-  const parts = String(message.text || "").trim().split(/\s+/);
-  if (parts.length < 2) {
+  const text = String(message.text || "").trim();
+  const isSlashCommand = text.startsWith("/new_invoice");
+  const parts = text.split(/\s+/);
+  const hasCommandArgs = isSlashCommand && parts.length >= 2;
+
+  if (!hasCommandArgs) {
     setAdminSession(message.chat.id, ADMIN_MODES.CREATE_AMOUNT);
     await sendMessage(
       message.chat.id,
@@ -331,7 +335,7 @@ async function handleNewInvoiceCommand(message) {
     return;
   }
 
-  const args = parseNewInvoiceArgs(message.text || "");
+  const args = parseNewInvoiceArgs(text);
   await createInvoiceFromArgs(message, args);
 }
 
@@ -418,11 +422,12 @@ async function handleAdminSessionInput(message, text) {
   }
 
   if (session.mode === ADMIN_MODES.CREATE_AMOUNT) {
-    const amountUsd = Number(text);
+    const normalizedAmount = String(text || "").trim().replace(",", ".");
+    const amountUsd = Number(normalizedAmount);
     if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
       await sendMessage(
         message.chat.id,
-        "Importo non valido. Inserisci un numero positivo in USD.",
+        "Importo non valido. Inserisci un numero positivo in USD (esempio: 150.50).",
         adminKeyboard(),
       );
       return true;
