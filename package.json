@@ -1,0 +1,22 @@
+{
+  "name": "crypto-new",
+  "version": "1.0.0",
+  "description": "MVP bot Telegram + invoice crypto (USDT/BTC/ETH)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "set:webhook": "node scripts/set-webhook.js",
+    "self-check": "node scripts/self-check.js",
+    "test": "node -e \"console.log('No tests configured')\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "qrcode": "^1.5.4"
+  }
+}
