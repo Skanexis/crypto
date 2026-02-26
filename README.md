@@ -14,6 +14,7 @@ Sistema completo in Node.js che permette di:
 - Verifica on-chain automatica:
   - `ETH` via Etherscan API V2
   - `USDT (TRC20)` via TronGrid API
+  - `BTC` via Blockstream API
 - Verifica pagamenti via webhook provider (HMAC)
 - Endpoint manuale `mark-paid` e endpoint `verify-now`
 
@@ -30,6 +31,7 @@ Compila `.env` con:
 - `APP_BASE_URL` pubblico HTTPS in produzione
 - `ETHERSCAN_API_KEY` per verifiche ETH
 - `TRON_API_KEY` (consigliato) per verifiche USDT TRC20
+- endpoint BTC Blockstream configurato in `BTC_API_URL`
 
 Nota: Etherscan V2 richiede API key valida per interrogare `txlist`.
 Il sistema aggiunge un micro-offset all'importo crypto per rendere univoco ogni invoice anche con wallet condiviso.
@@ -67,12 +69,22 @@ curl -X POST http://localhost:3000/telegram/set-webhook \
 - `/start`: mostra fatture aperte associate al tuo `telegram_user_id`
 - `/my_invoices`: elenco fatture aperte
 - `/help`: aiuto
-- `/new_invoice <importo_usd> [telegram_user_id] [valute]` (admin)
+- `/admin`: apre menu admin con pulsanti UX
+- `/new_invoice <importo_usd> [telegram_user_id] [valute]` (admin, rapido)
+- `/invoice_status <invoice_id>` (admin)
+- `/pending_invoices` (admin)
+- `/delete_all_invoices` (admin, richiede conferma)
 
 Esempio:
 ```text
 /new_invoice 100 123456789 USDT,BTC,ETH
 ```
+
+Nel menu admin Telegram:
+- `➕ Nuova fattura` avvia wizard guidato
+- `📄 Fatture aperte` mostra ultime fatture pendenti
+- `🔎 Stato fattura` chiede invoice id e mostra dettaglio
+- `🧹 Elimina tutte le fatture` richiede conferma testuale `ELIMINA TUTTO`
 
 ## API principali
 
@@ -96,6 +108,9 @@ Body esempio:
 ### Stato fattura per ID (admin)
 `GET /api/invoices/id/:invoiceId/status`
 
+### Ultime fatture pendenti (admin)
+`GET /api/invoices/pending?limit=20`
+
 ### Conferma manuale pagamento (admin)
 `POST /api/invoices/:invoiceId/mark-paid`
 
@@ -115,6 +130,21 @@ Headers:
 - `x-api-key: <ADMIN_API_KEY>`
 
 Risposta: summary con `checked`, `paid`, `errors`.
+
+### Eliminazione massiva fatture (admin)
+`POST /api/invoices/delete-all`
+
+Headers:
+- `x-api-key: <ADMIN_API_KEY>`
+
+Body:
+```json
+{
+  "confirm": "DELETE_ALL"
+}
+```
+
+Risposta: summary con numero di invoice/payment eliminate.
 
 ## Hardening pagamenti
 - Matching importi in modalita stretta (default):
@@ -155,7 +185,7 @@ Body esempio:
 - Proteggi `ADMIN_API_KEY`.
 - Imposta rate-limit/firewall lato reverse proxy.
 - Imposta API key reali per Etherscan/TronGrid.
+- Verifica che `BTC_API_URL` punti al provider corretto (mainnet/testnet).
 
 ## Limiti MVP
-- Verifica automatica implementata per `ETH` e `USDT TRC20`.
-- `BTC` rimane gestito via webhook provider esterno o conferma manuale.
+- Verifica automatica implementata per `ETH`, `USDT TRC20`, `BTC`.

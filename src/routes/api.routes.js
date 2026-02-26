@@ -4,10 +4,12 @@ const { requireAdminApiKey } = require("../middleware/auth");
 const { createRateLimit } = require("../middleware/rate-limit");
 const {
   createInvoice,
+  listPendingInvoices,
   getInvoiceStatusById,
   getInvoiceWithPaymentsByToken,
   getInvoiceWithPaymentsById,
   markInvoicePaid,
+  deleteAllInvoices,
 } = require("../services/invoices.service");
 const { fetchRatesUsd } = require("../services/rates.service");
 const {
@@ -81,6 +83,38 @@ router.post("/invoices", requireAdminApiKey, async (req, res, next) => {
     });
     res.status(201).json({
       invoice,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/invoices/pending", requireAdminApiKey, (req, res, next) => {
+  try {
+    const limit = Number(req.query.limit || 20);
+    const invoices = listPendingInvoices(limit);
+    res.json({
+      invoices,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/invoices/delete-all", requireAdminApiKey, (req, res, next) => {
+  try {
+    if (String(req.body.confirm || "").trim().toUpperCase() !== "DELETE_ALL") {
+      res.status(400).json({
+        error: "Bad Request",
+        message: "Conferma mancante. Invia confirm=DELETE_ALL",
+      });
+      return;
+    }
+
+    const summary = deleteAllInvoices();
+    res.json({
+      ok: true,
+      summary,
     });
   } catch (error) {
     next(error);

@@ -21,7 +21,11 @@ process.env.PAYMENT_WEBHOOK_HMAC_SECRET =
   process.env.PAYMENT_WEBHOOK_HMAC_SECRET || "self-check-secret";
 
 const { db } = require("../src/db");
-const { createInvoice, markInvoicePaid } = require("../src/services/invoices.service");
+const {
+  createInvoice,
+  deleteAllInvoices,
+  markInvoicePaid,
+} = require("../src/services/invoices.service");
 const { processPaymentWebhook, isValidWebhookSignature } = require("../src/services/payments.service");
 
 function assert(condition, message) {
@@ -33,20 +37,23 @@ function assert(condition, message) {
 async function run() {
   const invA = await createInvoice({
     amountUsd: 100,
-    allowedCurrencies: ["ETH"],
+    allowedCurrencies: ["ETH", "BTC"],
     telegramUserId: null,
     createdByAdminId: "self-check",
   });
   const invB = await createInvoice({
     amountUsd: 100,
-    allowedCurrencies: ["ETH"],
+    allowedCurrencies: ["ETH", "BTC"],
     telegramUserId: null,
     createdByAdminId: "self-check",
   });
 
   const amountA = invA.payments.find((p) => p.currency === "ETH").expectedAmountCrypto;
   const amountB = invB.payments.find((p) => p.currency === "ETH").expectedAmountCrypto;
+  const btcA = invA.payments.find((p) => p.currency === "BTC").expectedAmountCrypto;
+  const btcB = invB.payments.find((p) => p.currency === "BTC").expectedAmountCrypto;
   assert(amountA !== amountB, "Expected unique ETH amounts for two open invoices");
+  assert(btcA !== btcB, "Expected unique BTC amounts for two open invoices");
 
   const paid1 = markInvoicePaid({
     invoiceId: invA.id,
@@ -127,6 +134,14 @@ async function run() {
       .digest("hex");
   assert(isValidWebhookSignature(body, signature), "Expected webhook signature validation to pass");
   assert(!isValidWebhookSignature(body, "sha256=00"), "Expected webhook signature validation to fail");
+
+  const deleteSummary = deleteAllInvoices();
+  assert(
+    deleteSummary.deletedInvoices >= 1,
+    "Expected deleteAllInvoices to delete at least one invoice",
+  );
+  const remaining = db.prepare("SELECT COUNT(*) AS total FROM invoices").get();
+  assert(Number(remaining.total || 0) === 0, "Expected invoices table to be empty");
 
   console.log("Self-check passed");
 }

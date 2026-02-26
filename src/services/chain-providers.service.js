@@ -19,7 +19,7 @@ function shouldRetry(responseStatus, error) {
   return responseStatus === 429 || responseStatus >= 500;
 }
 
-async function fetchJson(url, options = {}) {
+async function fetchWithRetry(url, options = {}) {
   const maxAttempts = Math.max(1, Number(config.providerMaxRetries || 0) + 1);
   let attempt = 0;
   let lastError = null;
@@ -33,23 +33,21 @@ async function fetchJson(url, options = {}) {
         signal: createTimeoutSignal(),
       });
       responseStatus = response.status;
-      const bodyText = await response.text();
-
-      let payload;
-      try {
-        payload = bodyText ? JSON.parse(bodyText) : {};
-      } catch (_error) {
-        throw new Error(`Provider response non JSON (${response.status})`);
-      }
-
       if (!response.ok) {
+        const bodyText = await response.text();
+        let payload = {};
+        try {
+          payload = bodyText ? JSON.parse(bodyText) : {};
+        } catch (_error) {
+          // no-op
+        }
         const err = new Error(
-          `Provider HTTP ${response.status}: ${payload.message || payload.error || "errore"}`,
+          `Provider HTTP ${response.status}: ${payload.message || payload.error || bodyText || "errore"}`,
         );
         err.responseStatus = response.status;
         throw err;
       }
-      return payload;
+      return response;
     } catch (error) {
       lastError = error;
       const retry = attempt < maxAttempts && shouldRetry(responseStatus, error);
@@ -62,6 +60,21 @@ async function fetchJson(url, options = {}) {
   }
 
   throw lastError || new Error("Provider request failed");
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetchWithRetry(url, options);
+  const bodyText = await response.text();
+  try {
+    return bodyText ? JSON.parse(bodyText) : {};
+  } catch (_error) {
+    throw new Error(`Provider response non JSON (${response.status})`);
+  }
+}
+
+async function fetchText(url, options = {}) {
+  const response = await fetchWithRetry(url, options);
+  return response.text();
 }
 
 function normalizeEthTxHash(hash) {
@@ -146,6 +159,10 @@ function normalizeTronTxHash(hash) {
   return String(hash || "").toLowerCase();
 }
 
+function normalizeBtcTxHash(hash) {
+  return String(hash || "").toLowerCase();
+}
+
 async function fetchTronCurrentBlockNumber() {
   const url = `${config.providers.tron.apiUrl}/wallet/getnowblock`;
   const payload = await fetchJson(url, {
@@ -215,11 +232,98 @@ async function fetchTronUsdtIncomingTransfers(walletAddress) {
     .sort((a, b) => b.timestampMs - a.timestampMs);
 }
 
+async function fetchBtcCurrentTipHeight() {
+  const url = `${config.providers.btc.apiUrl}/blocks/tip/height`;
+  const value = await fetchText(url, {
+    method: "GET",
+    headers: { accept: "text/plain" },
+  });
+  const parsed = Number(String(value || "").trim());
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error("BTC tip height non valido");
+  }
+  return parsed;
+}
+
+async function fetchBtcAddressTransactions(walletAddress, tipHeight) {
+  const wallet = String(walletAddress || "").trim();
+  if (!wallet) {
+    return [];
+  }
+  const isBech32Wallet = wallet.toLowerCase().startsWith("bc1");
+  const normalizedWallet = isBech32Wallet ? wallet.toLowerCase() : wallet;
+
+  const maxItems = Math.max(1, Number(config.providers.btc.txScanLimit || 100));
+  const pageSize = 25;
+  const rows = [];
+  let lastSeenTxid = null;
+
+  while (rows.length < maxItems) {
+    const endpoint = lastSeenTxid
+      ? `${config.providers.btc.apiUrl}/address/${encodeURIComponent(wallet)}/txs/chain/${encodeURIComponent(lastSeenTxid)}`
+      : `${config.providers.btc.apiUrl}/address/${encodeURIComponent(wallet)}/txs`;
+
+    const payload = await fetchJson(endpoint, {
+      method: "GET",
+      headers: { accept: "application/json" },
+    });
+    if (!Array.isArray(payload) || payload.length === 0) {
+      break;
+    }
+
+    rows.push(...payload);
+    if (payload.length < pageSize) {
+      break;
+    }
+    lastSeenTxid = payload[payload.length - 1]?.txid;
+    if (!lastSeenTxid) {
+      break;
+    }
+  }
+
+  return rows
+    .slice(0, maxItems)
+    .map((tx) => {
+      const outputs = Array.isArray(tx.vout) ? tx.vout : [];
+      const paidSats = outputs.reduce((acc, output) => {
+        const rawAddress = String(output?.scriptpubkey_address || "").trim();
+        const toAddress = isBech32Wallet ? rawAddress.toLowerCase() : rawAddress;
+        if (toAddress !== normalizedWallet) {
+          return acc;
+        }
+        return acc + Number(output?.value || 0);
+      }, 0);
+
+      const confirmed = Boolean(tx?.status?.confirmed);
+      const blockHeight = Number(tx?.status?.block_height || 0);
+      const blockTimeSec = Number(tx?.status?.block_time || 0);
+      const confirmations =
+        confirmed && Number.isFinite(tipHeight) && tipHeight > 0 && blockHeight > 0
+          ? Math.max(tipHeight - blockHeight + 1, 0)
+          : 0;
+
+      return {
+        hash: normalizeBtcTxHash(tx.txid),
+        amount: paidSats / 1e8,
+        amountSats: paidSats,
+        timestampMs: blockTimeSec > 0 ? blockTimeSec * 1000 : 0,
+        confirmations,
+        confirmed,
+        blockHeight,
+      };
+    })
+    .filter((tx) => Number.isFinite(tx.amount) && tx.amount > 0)
+    .sort((a, b) => b.timestampMs - a.timestampMs);
+}
+
 module.exports = {
   fetchEthIncomingTransactions,
   fetchTronCurrentBlockNumber,
   fetchTronTransactionInfo,
   fetchTronUsdtIncomingTransfers,
+  fetchBtcCurrentTipHeight,
+  fetchBtcAddressTransactions,
   normalizeEthTxHash,
   normalizeTronTxHash,
+  normalizeBtcTxHash,
 };

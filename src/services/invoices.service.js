@@ -398,6 +398,66 @@ function listOpenInvoicesForTelegramUser(telegramUserId) {
   return rows.map((row) => toInvoiceDto(row, null));
 }
 
+function listPendingInvoices(limit = 10) {
+  const max = Math.max(1, Math.min(100, Number(limit || 10)));
+  const rows = db
+    .prepare(
+      `
+        SELECT * FROM invoices
+        WHERE status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT ?
+      `,
+    )
+    .all(max);
+
+  return rows.map((row) => toInvoiceDto(row, null));
+}
+
+function deleteAllInvoices() {
+  const now = nowIso();
+  const summary = {
+    deletedInvoices: 0,
+    deletedPayments: 0,
+    deletedOpenInvoices: 0,
+    deletedOpenPayments: 0,
+    executedAt: now,
+  };
+
+  const tx = db.transaction(() => {
+    const invoiceCountRow = db
+      .prepare(`SELECT COUNT(*) AS total FROM invoices`)
+      .get();
+    const paymentCountRow = db
+      .prepare(`SELECT COUNT(*) AS total FROM payments`)
+      .get();
+    const openInvoiceCountRow = db
+      .prepare(`SELECT COUNT(*) AS total FROM invoices WHERE status = 'pending'`)
+      .get();
+    const openPaymentCountRow = db
+      .prepare(
+        `
+          SELECT COUNT(*) AS total
+          FROM payments
+          WHERE status IN (${OPEN_PAYMENT_STATUSES.map(() => "?").join(", ")})
+        `,
+      )
+      .get(...OPEN_PAYMENT_STATUSES);
+
+    summary.deletedInvoices = Number(invoiceCountRow?.total || 0);
+    summary.deletedPayments = Number(paymentCountRow?.total || 0);
+    summary.deletedOpenInvoices = Number(openInvoiceCountRow?.total || 0);
+    summary.deletedOpenPayments = Number(openPaymentCountRow?.total || 0);
+
+    db.prepare(`DELETE FROM invoices`).run();
+  });
+
+  tx();
+
+  logEvent("invoice", "*", "bulk_deleted", summary);
+  return summary;
+}
+
 function expireDueInvoices() {
   const now = nowIso();
   const graceMs = Math.max(0, Number(config.paymentLateGraceMinutes || 0)) * 60 * 1000;
@@ -661,10 +721,12 @@ module.exports = {
   createInvoice,
   upsertTelegramUser,
   listOpenInvoicesForTelegramUser,
+  listPendingInvoices,
   getInvoiceWithPaymentsById,
   getInvoiceWithPaymentsByToken,
   getInvoiceStatusById,
   markInvoicePaid,
+  deleteAllInvoices,
   expireDueInvoices,
   normalizeCurrencies,
   listPendingPaymentsForCurrencies,

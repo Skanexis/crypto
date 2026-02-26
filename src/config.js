@@ -84,6 +84,11 @@ module.exports = {
       minConfirmations: parseNumber(process.env.TRON_CONFIRMATIONS_MIN, 20),
       txScanLimit: parseNumber(process.env.TRON_TX_SCAN_LIMIT, 100),
     },
+    btc: {
+      apiUrl: process.env.BTC_API_URL || "https://blockstream.info/api",
+      minConfirmations: parseNumber(process.env.BTC_CONFIRMATIONS_MIN, 2),
+      txScanLimit: parseNumber(process.env.BTC_TX_SCAN_LIMIT, 100),
+    },
   },
   walletAddresses: {
     USDT: process.env.USDT_WALLET_ADDRESS || "",

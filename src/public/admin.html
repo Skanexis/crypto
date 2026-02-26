@@ -3,77 +3,117 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Admin - Fatture Crypto</title>
+    <title>Admin Dashboard - Crypto Invoice</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="shell fade-in">
-      <section class="glass">
-        <div class="header">
-          <h1>Pannello Admin</h1>
-          <p>Crea e gestisci fatture in USD con pagamento crypto.</p>
-        </div>
+    <main class="page fade-in">
+      <section class="stripe-shell">
+        <header class="stripe-top">
+          <div class="top-eyebrow">Pannello Operativo</div>
+          <h1>Payments Admin</h1>
+          <p class="top-sub">
+            Crea fatture in USD, invia link al cliente e monitora conferme blockchain in tempo reale.
+          </p>
+          <div class="hero-row">
+            <span class="pill">USDT TRC20</span>
+            <span class="pill">BTC</span>
+            <span class="pill">ETH</span>
+            <span class="pill">Webhook + Verifica on-chain</span>
+          </div>
+        </header>
 
-        <div class="content grid cols-2">
-          <section class="card">
-            <h3>Crea fattura</h3>
-            <div class="label" style="margin-top: 12px">API Key admin</div>
-            <input id="apiKey" type="password" placeholder="Inserisci x-api-key" />
+        <div class="shell-body">
+          <div class="layout-two">
+            <section class="panel">
+              <h3 class="panel-title">Crea Nuova Fattura</h3>
+              <p class="panel-note">
+                L'importo è sempre in USD. Il sistema genera importi crypto e link pagamento univoco.
+              </p>
 
-            <div class="label" style="margin-top: 12px">Importo USD</div>
-            <input id="amountUsd" type="number" min="0.01" step="0.01" value="100.00" />
+              <div class="field">
+                <label for="apiKey">API Key admin</label>
+                <input id="apiKey" type="password" placeholder="Inserisci x-api-key" autocomplete="off" />
+              </div>
 
-            <div class="label" style="margin-top: 12px">Telegram User ID cliente (opzionale)</div>
-            <input id="telegramUserId" type="text" placeholder="es. 123456789" />
+              <div class="field">
+                <label for="amountUsd">Importo USD</label>
+                <input id="amountUsd" type="number" min="0.01" step="0.01" value="100.00" />
+              </div>
 
-            <div class="label" style="margin-top: 12px">Valute abilitate</div>
-            <div class="checks">
-              <label><input type="checkbox" value="USDT" checked /> USDT</label>
-              <label><input type="checkbox" value="BTC" checked /> BTC</label>
-              <label><input type="checkbox" value="ETH" checked /> ETH</label>
-            </div>
+              <div class="field">
+                <label for="telegramUserId">Telegram User ID cliente (opzionale)</label>
+                <input id="telegramUserId" type="text" placeholder="es. 123456789" />
+              </div>
 
-            <div class="actions" style="margin-top: 14px">
-              <button id="createBtn" class="btn-primary" type="button">Crea fattura</button>
-            </div>
+              <div class="field">
+                <label>Valute abilitate</label>
+                <div class="currency-checks">
+                  <label><input type="checkbox" value="USDT" checked /> USDT</label>
+                  <label><input type="checkbox" value="BTC" checked /> BTC</label>
+                  <label><input type="checkbox" value="ETH" checked /> ETH</label>
+                </div>
+              </div>
 
-            <div id="createResult" class="notice admin-result hidden"></div>
-          </section>
+              <div class="actions">
+                <button id="createBtn" class="btn-primary" type="button">Crea fattura</button>
+              </div>
 
-          <section class="card">
-            <h3>Gestione rapida</h3>
-            <div class="label" style="margin-top: 12px">Invoice ID</div>
-            <input id="invoiceId" type="text" placeholder="UUID fattura" />
+              <div id="createResult" class="result-box hidden"></div>
+            </section>
 
-            <div class="label" style="margin-top: 12px">Valuta pagata</div>
-            <select id="paidCurrency">
-              <option value="USDT">USDT</option>
-              <option value="BTC">BTC</option>
-              <option value="ETH">ETH</option>
-            </select>
+            <section class="panel">
+              <h3 class="panel-title">Gestione Fattura</h3>
+              <p class="panel-note">
+                Controlla stato, marca manualmente pagamenti o forzi la verifica on-chain immediata.
+              </p>
 
-            <div class="label" style="margin-top: 12px">TX hash (opzionale)</div>
-            <input id="txHash" type="text" placeholder="Hash transazione" />
+              <div class="field">
+                <label for="invoiceId">Invoice ID</label>
+                <input id="invoiceId" type="text" placeholder="UUID fattura" />
+              </div>
 
-            <div class="actions" style="margin-top: 14px">
-              <button id="statusBtn" class="btn-secondary" type="button">Controlla stato</button>
-              <button id="markPaidBtn" class="btn-primary" type="button">Segna come pagata</button>
-              <button id="verifyNowBtn" class="btn-secondary" type="button">Verifica on-chain ora</button>
-            </div>
+              <div class="field">
+                <label for="paidCurrency">Valuta pagata</label>
+                <select id="paidCurrency">
+                  <option value="USDT">USDT</option>
+                  <option value="BTC">BTC</option>
+                  <option value="ETH">ETH</option>
+                </select>
+              </div>
 
-            <div id="manageResult" class="notice admin-result hidden"></div>
-          </section>
+              <div class="field">
+                <label for="txHash">TX hash (opzionale)</label>
+                <input id="txHash" type="text" placeholder="Hash transazione" />
+              </div>
+
+              <div class="actions">
+                <button id="statusBtn" class="btn-secondary" type="button">Controlla stato</button>
+                <button id="markPaidBtn" class="btn-primary" type="button">Segna come pagata</button>
+                <button id="verifyNowBtn" class="btn-ghost" type="button">Verifica on-chain ora</button>
+              </div>
+
+              <div id="manageResult" class="result-box hidden"></div>
+            </section>
+          </div>
         </div>
       </section>
     </main>
 
     <script>
+      const controls = {
+        createBtn: document.getElementById("createBtn"),
+        statusBtn: document.getElementById("statusBtn"),
+        markPaidBtn: document.getElementById("markPaidBtn"),
+        verifyNowBtn: document.getElementById("verifyNowBtn"),
+      };
+
       function getApiKey() {
         return document.getElementById("apiKey").value.trim();
       }
@@ -81,12 +121,26 @@
       function setResult(id, content, isError = false) {
         const el = document.getElementById(id);
         el.classList.remove("hidden");
-        el.style.borderColor = isError ? "#ef7b3a" : "#c9dae8";
+        el.classList.toggle("error", Boolean(isError));
         el.textContent = content;
       }
 
       function selectedCurrencies() {
-        return [...document.querySelectorAll('input[type="checkbox"]:checked')].map((item) => item.value);
+        return [...document.querySelectorAll('.currency-checks input[type="checkbox"]:checked')].map(
+          (item) => item.value,
+        );
+      }
+
+      function setBusy(button, busy, busyText) {
+        if (!button) return;
+        if (busy) {
+          button.dataset.originalText = button.textContent;
+          button.textContent = busyText;
+          button.disabled = true;
+        } else {
+          button.textContent = button.dataset.originalText || button.textContent;
+          button.disabled = false;
+        }
       }
 
       async function createInvoice() {
@@ -99,30 +153,35 @@
           return;
         }
 
-        const response = await fetch("/api/invoices", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-api-key": getApiKey(),
-          },
-          body: JSON.stringify({
-            amount_usd: amountUsd,
-            telegram_user_id: telegramUserId || null,
-            allowed_currencies: allowedCurrencies,
-          }),
-        });
+        setBusy(controls.createBtn, true, "Creazione...");
+        try {
+          const response = await fetch("/api/invoices", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": getApiKey(),
+            },
+            body: JSON.stringify({
+              amount_usd: amountUsd,
+              telegram_user_id: telegramUserId || null,
+              allowed_currencies: allowedCurrencies,
+            }),
+          });
 
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || "Errore creazione fattura");
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.message || "Errore creazione fattura");
+          }
+
+          const invoice = data.invoice;
+          setResult(
+            "createResult",
+            `Fattura creata con successo\nID: ${invoice.id}\nScadenza: ${new Date(invoice.expiresAt).toLocaleString("it-IT")}\nLink: ${invoice.paymentUrl}`,
+          );
+          document.getElementById("invoiceId").value = invoice.id;
+        } finally {
+          setBusy(controls.createBtn, false);
         }
-
-        const invoice = data.invoice;
-        setResult(
-          "createResult",
-          `Fattura creata.\nID: ${invoice.id}\nLink: ${invoice.paymentUrl}\nScadenza: ${new Date(invoice.expiresAt).toLocaleString("it-IT")}`,
-        );
-        document.getElementById("invoiceId").value = invoice.id;
       }
 
       async function checkStatus() {
@@ -132,21 +191,26 @@
           return;
         }
 
-        const response = await fetch(`/api/invoices/id/${invoiceId}/status`, {
-          headers: {
-            "x-api-key": getApiKey(),
-          },
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || "Errore stato fattura");
-        }
+        setBusy(controls.statusBtn, true, "Carico...");
+        try {
+          const response = await fetch(`/api/invoices/id/${invoiceId}/status`, {
+            headers: {
+              "x-api-key": getApiKey(),
+            },
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.message || "Errore stato fattura");
+          }
 
-        const status = data.status;
-        setResult(
-          "manageResult",
-          `Stato: ${status.status}\nImporto: ${status.amountUsd.toFixed(2)} USD\nLink: ${status.paymentUrl}`,
-        );
+          const status = data.status;
+          setResult(
+            "manageResult",
+            `Stato: ${status.status}\nImporto: ${status.amountUsd.toFixed(2)} USD\nScadenza: ${new Date(status.expiresAt).toLocaleString("it-IT")}\nLink: ${status.paymentUrl}`,
+          );
+        } finally {
+          setBusy(controls.statusBtn, false);
+        }
       }
 
       async function markPaid() {
@@ -156,54 +220,64 @@
           return;
         }
 
-        const response = await fetch(`/api/invoices/${invoiceId}/mark-paid`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-api-key": getApiKey(),
-          },
-          body: JSON.stringify({
-            currency: document.getElementById("paidCurrency").value,
-            tx_hash: document.getElementById("txHash").value.trim() || null,
-            confirmations: 1,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || "Errore conferma pagamento");
-        }
+        setBusy(controls.markPaidBtn, true, "Aggiorno...");
+        try {
+          const response = await fetch(`/api/invoices/${invoiceId}/mark-paid`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": getApiKey(),
+            },
+            body: JSON.stringify({
+              currency: document.getElementById("paidCurrency").value,
+              tx_hash: document.getElementById("txHash").value.trim() || null,
+              confirmations: 1,
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.message || "Errore conferma pagamento");
+          }
 
-        if (data.changed) {
-          setResult(
-            "manageResult",
-            `Fattura aggiornata.\nNuovo stato: ${data.invoice.status}\nID: ${data.invoice.id}`,
-          );
-        } else {
-          setResult(
-            "manageResult",
-            `Nessuna modifica.\nStato attuale: ${data.invoice.status}\nMotivo: ${data.reason || "n/a"}`,
-          );
+          if (data.changed) {
+            setResult(
+              "manageResult",
+              `Pagamento registrato\nInvoice: ${data.invoice.id}\nNuovo stato: ${data.invoice.status}`,
+            );
+          } else {
+            setResult(
+              "manageResult",
+              `Nessuna modifica\nStato attuale: ${data.invoice.status}\nMotivo: ${data.reason || "n/a"}`,
+            );
+          }
+        } finally {
+          setBusy(controls.markPaidBtn, false);
         }
       }
 
       async function verifyNow() {
-        const response = await fetch("/api/payments/verify-now", {
-          method: "POST",
-          headers: {
-            "x-api-key": getApiKey(),
-          },
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || "Errore verifica on-chain");
+        setBusy(controls.verifyNowBtn, true, "Verifico...");
+        try {
+          const response = await fetch("/api/payments/verify-now", {
+            method: "POST",
+            headers: {
+              "x-api-key": getApiKey(),
+            },
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.message || "Errore verifica on-chain");
+          }
+          setResult(
+            "manageResult",
+            `Verifica completata\nControllate: ${data.summary.checked}\nPagate: ${data.summary.paid}\nErrori: ${data.summary.errors.length}`,
+          );
+        } finally {
+          setBusy(controls.verifyNowBtn, false);
         }
-        setResult(
-          "manageResult",
-          `Verifica completata.\nControllate: ${data.summary.checked}\nPagate: ${data.summary.paid}\nErrori: ${data.summary.errors.length}`,
-        );
       }
 
-      document.getElementById("createBtn").addEventListener("click", async () => {
+      controls.createBtn.addEventListener("click", async () => {
         try {
           await createInvoice();
         } catch (error) {
@@ -211,7 +285,7 @@
         }
       });
 
-      document.getElementById("statusBtn").addEventListener("click", async () => {
+      controls.statusBtn.addEventListener("click", async () => {
         try {
           await checkStatus();
         } catch (error) {
@@ -219,7 +293,7 @@
         }
       });
 
-      document.getElementById("markPaidBtn").addEventListener("click", async () => {
+      controls.markPaidBtn.addEventListener("click", async () => {
         try {
           await markPaid();
         } catch (error) {
@@ -227,7 +301,7 @@
         }
       });
 
-      document.getElementById("verifyNowBtn").addEventListener("click", async () => {
+      controls.verifyNowBtn.addEventListener("click", async () => {
         try {
           await verifyNow();
         } catch (error) {

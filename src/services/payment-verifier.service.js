@@ -10,8 +10,11 @@ const {
   fetchTronCurrentBlockNumber,
   fetchTronTransactionInfo,
   fetchTronUsdtIncomingTransfers,
+  fetchBtcCurrentTipHeight,
+  fetchBtcAddressTransactions,
   normalizeEthTxHash,
   normalizeTronTxHash,
+  normalizeBtcTxHash,
 } = require("./chain-providers.service");
 
 const EARLY_MATCH_GRACE_MS = Math.max(
@@ -197,6 +200,11 @@ function shouldVerifyTronUsdtPayment(payment) {
   return network.includes("TRC20") || network.includes("TRON");
 }
 
+function shouldVerifyBtcPayment(payment) {
+  const network = String(payment.network || "").toUpperCase();
+  return network.includes("BTC") || network.includes("BITCOIN");
+}
+
 async function verifyTronUsdtPayments() {
   const pending = listPendingPaymentsForCurrencies(["USDT"]).filter(
     shouldVerifyTronUsdtPayment,
@@ -298,6 +306,100 @@ async function verifyTronUsdtPayments() {
   };
 }
 
+async function verifyBtcPayments() {
+  const pending = listPendingPaymentsForCurrencies(["BTC"]).filter(
+    shouldVerifyBtcPayment,
+  );
+  if (!pending.length) {
+    return {
+      currency: "BTC",
+      checked: 0,
+      paid: 0,
+      errors: [],
+    };
+  }
+
+  let tipHeight = 0;
+  try {
+    tipHeight = await fetchBtcCurrentTipHeight();
+  } catch (error) {
+    return {
+      currency: "BTC",
+      checked: 0,
+      paid: 0,
+      errors: [`BTC tip height error: ${error.message}`],
+    };
+  }
+
+  const walletMap = groupByWallet(pending);
+  const usedHashes = new Set();
+  const errors = [];
+  let checked = 0;
+  let paid = 0;
+
+  for (const [wallet, walletPayments] of walletMap.entries()) {
+    let transactions = [];
+    try {
+      transactions = await fetchBtcAddressTransactions(wallet, tipHeight);
+    } catch (error) {
+      errors.push(`BTC wallet ${wallet}: ${error.message}`);
+      continue;
+    }
+
+    const sortedPayments = sortByInvoiceCreatedAtAsc(walletPayments);
+    for (const payment of sortedPayments) {
+      checked += 1;
+      const candidate = transactions.find((tx) => {
+        const hash = normalizeBtcTxHash(tx.hash);
+        if (!hash || usedHashes.has(hash) || isTxHashAlreadyUsed(hash)) {
+          return false;
+        }
+        if (!isInInvoiceWindow(payment, tx.timestampMs)) {
+          return false;
+        }
+        if (
+          Number(tx.confirmations || 0) <
+          Number(config.providers.btc.minConfirmations || 0)
+        ) {
+          return false;
+        }
+        return isAmountMatch(payment, tx.amount);
+      });
+
+      if (!candidate) {
+        continue;
+      }
+
+      try {
+        const confirmResult = await confirmInvoice(
+          payment,
+          {
+            hash: normalizeBtcTxHash(candidate.hash),
+            amount: candidate.amount,
+            confirmations: candidate.confirmations,
+          },
+          "blockstream-btc",
+        );
+        if (confirmResult.changed) {
+          usedHashes.add(normalizeBtcTxHash(candidate.hash));
+          paid += 1;
+        }
+      } catch (error) {
+        errors.push(
+          `BTC invoice ${payment.invoiceId} / tx ${candidate.hash}: ${error.message}`,
+        );
+      }
+    }
+  }
+
+  return {
+    currency: "BTC",
+    checked,
+    paid,
+    errors,
+  };
+}
+
 async function verifyPendingPayments() {
   if (verifierInProgress) {
     return {
@@ -326,7 +428,8 @@ async function verifyPendingPayments() {
 
     const ethResult = await verifyEthPayments();
     const tronResult = await verifyTronUsdtPayments();
-    summary.results.push(ethResult, tronResult);
+    const btcResult = await verifyBtcPayments();
+    summary.results.push(ethResult, tronResult, btcResult);
 
     for (const item of summary.results) {
       summary.checked += item.checked;
