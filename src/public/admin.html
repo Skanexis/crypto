@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Console Admin Pagamenti</title>
+    <title>Amministrazione Pagamenti</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -13,398 +13,241 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="app fade-in">
+    <main class="shell">
       <header class="hero">
-        <div class="hero-head">
+        <div class="hero-top">
           <div>
-            <span class="eyebrow">Payments OS</span>
-            <h1>Premium Admin Console</h1>
+            <span class="eyebrow">Suite Operativa</span>
+            <h1>Centro Controllo Pagamenti</h1>
             <p>
-              Crea fatture in USD, monitora gli stati in tempo reale e gestisci verifiche blockchain da un unico
-              pannello rapido.
+              Gestione enterprise di invoice crypto: short ID unificati, dettagli transazioni, log eventi e
+              automazione verifiche on-chain.
             </p>
+            <div class="hero-chips">
+              <span class="chip">USDT TRC20</span>
+              <span class="chip">BTC</span>
+              <span class="chip">ETH</span>
+              <span class="chip">ID brevi: INV/TX</span>
+            </div>
           </div>
-          <div class="hero-side">
-            <span class="chip">Live Control</span>
-            <small>API sicura + monitor on-chain</small>
+
+          <div class="hero-cta" style="min-width: 280px; width: min(360px, 100%)">
+            <div class="field" style="width: 100%; margin-top: 0">
+              <label for="apiKey" style="color: rgba(255, 255, 255, 0.9)">Chiave API admin</label>
+              <input id="apiKey" class="input" type="password" autocomplete="off" placeholder="x-api-key" />
+            </div>
+            <div class="actions" style="margin-top: 0">
+              <button id="connectBtn" class="btn btn-primary" type="button">Connetti</button>
+              <button id="refreshBtn" class="btn btn-secondary" type="button">Aggiorna</button>
+            </div>
+            <div class="actions" style="margin-top: 0">
+              <button id="autoRefreshBtn" class="btn btn-ghost" type="button">Aggiornamento automatico: OFF</button>
+            </div>
+            <small>Connessione richiesta per operazioni di amministrazione.</small>
           </div>
-        </div>
-        <div class="hero-chips">
-          <span class="chip">USDT TRC20</span>
-          <span class="chip">BTC</span>
-          <span class="chip">ETH</span>
-          <span class="chip">Telegram Bot</span>
         </div>
       </header>
 
-      <section class="content">
-        <div class="grid-2">
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <h3>Nuova fattura</h3>
-                <p>Inserisci i dati minimi e genera subito un link pagamento.</p>
-              </div>
-              <span class="pill">Step 1</span>
+      <section class="grid grid-3" id="metricsGrid">
+        <article class="metric">
+          <small>Fatture totali</small>
+          <strong id="mInvoicesTotal">-</strong>
+        </article>
+        <article class="metric warn">
+          <small>Fatture in attesa</small>
+          <strong id="mInvoicesPending">-</strong>
+        </article>
+        <article class="metric ok">
+          <small>Volume pagato USD</small>
+          <strong id="mVolumePaid">-</strong>
+        </article>
+        <article class="metric">
+          <small>Transazioni confermate</small>
+          <strong id="mTxConfirmed">-</strong>
+        </article>
+      </section>
+
+      <section class="grid grid-2-main">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Crea nuova fattura</h3>
+              <p>Generazione rapida con assegnazione ID breve.</p>
             </div>
+            <span class="pill">Creazione</span>
+          </div>
 
-            <div class="field">
-              <label for="apiKey">API Key admin</label>
-              <input id="apiKey" type="password" placeholder="Inserisci x-api-key" autocomplete="off" />
+          <div class="field">
+            <label for="amountUsd">Importo USD</label>
+            <input id="amountUsd" class="input" type="text" inputmode="decimal" value="100.00" />
+          </div>
+
+          <div class="field">
+            <label for="telegramUserId">Telegram user ID cliente (opzionale)</label>
+            <input id="telegramUserId" class="input" type="text" placeholder="es. 123456789" />
+          </div>
+
+          <div class="field">
+            <label>Valute abilitate</label>
+            <div class="currency-grid">
+              <label class="currency-item"><input type="checkbox" value="USDT" checked />USDT</label>
+              <label class="currency-item"><input type="checkbox" value="BTC" checked />BTC</label>
+              <label class="currency-item"><input type="checkbox" value="ETH" checked />ETH</label>
             </div>
+          </div>
 
-            <div class="field">
-              <label for="amountUsd">Importo in USD</label>
-              <input id="amountUsd" type="text" inputmode="decimal" value="100.00" placeholder="es. 150.50" />
+          <div class="actions">
+            <button id="createBtn" class="btn btn-primary" type="button">Crea fattura</button>
+            <button id="verifyBtn" class="btn btn-ghost" type="button">Verifica on-chain ora</button>
+            <button id="deleteAllBtn" class="btn btn-danger" type="button">Elimina tutte</button>
+          </div>
+
+          <div id="createNotice" class="notice hidden"></div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Registro fatture</h3>
+              <p>Ricerca e gestione per ID breve o UUID tecnico.</p>
             </div>
+            <span class="pill">Registro</span>
+          </div>
 
-            <div class="field">
-              <label for="telegramUserId">Telegram User ID cliente (opzionale)</label>
-              <input id="telegramUserId" type="text" placeholder="es. 123456789" />
+          <div class="toolbar">
+            <select id="statusFilter" class="select">
+              <option value="all">Tutti gli stati</option>
+              <option value="pending">in attesa</option>
+              <option value="paid">pagata</option>
+              <option value="expired">scaduta</option>
+              <option value="cancelled">annullata</option>
+            </select>
+            <input id="searchInput" class="input" type="text" placeholder="Cerca INV-..., UUID, token" />
+            <button id="searchBtn" class="btn btn-secondary" type="button">Cerca</button>
+            <button id="exportInvoicesBtn" class="btn btn-ghost" type="button">Esporta fatture CSV</button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+              <th>Rif</th>
+                  <th>Importo</th>
+                  <th>Stato</th>
+                  <th>Scadenza</th>
+                  <th>Telegram</th>
+                  <th>Aggiornata</th>
+                  <th>Tx hash</th>
+                  <th>Azioni</th>
+                </tr>
+              </thead>
+              <tbody id="invoiceTableBody"></tbody>
+            </table>
+          </div>
+
+          <div id="listNotice" class="notice hidden"></div>
+        </article>
+      </section>
+
+      <section class="split">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Dettagli fattura e transazioni</h3>
+              <p>Stato completo, portafoglio, hash e operazioni manuali.</p>
             </div>
+            <span id="selectedRef" class="pill">Nessuna selezione</span>
+          </div>
 
-            <div class="field">
-              <label>Valute abilitate</label>
-              <div class="currency-checks">
-                <label><input type="checkbox" value="USDT" checked /> USDT</label>
-                <label><input type="checkbox" value="BTC" checked /> BTC</label>
-                <label><input type="checkbox" value="ETH" checked /> ETH</label>
-              </div>
+          <div id="detailSummary" class="kv"></div>
+
+          <div class="field" style="margin-top: 12px">
+            <label>Transazioni invoice</label>
+            <div id="paymentsList" class="tx-list"></div>
+          </div>
+
+          <div class="field" style="margin-top: 12px">
+            <label>Conferma manuale pagamento</label>
+            <div class="stack">
+              <select id="markPaidCurrency" class="select"></select>
+              <input id="markPaidTxHash" class="input" type="text" placeholder="hash tx (opzionale)" />
+              <input
+                id="markPaidAmount"
+                class="input"
+                type="text"
+                inputmode="decimal"
+                placeholder="importo pagato crypto (opzionale)"
+              />
+              <button id="markPaidBtn" class="btn btn-primary" type="button">Segna come pagata</button>
             </div>
+          </div>
 
-            <div class="actions">
-              <button id="createBtn" class="btn-primary" type="button">Crea fattura</button>
+          <div id="detailNotice" class="notice hidden"></div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Registro eventi e flusso transazioni</h3>
+              <p>Timeline audit con entita e ID brevi correlati.</p>
             </div>
+            <span class="pill">Controllo</span>
+          </div>
 
-            <div id="createResult" class="result-box hidden"></div>
-          </article>
+          <div class="field" style="margin-top: 10px">
+            <label>Eventi</label>
+            <div id="eventsList" class="log-list"></div>
+          </div>
 
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <h3>Gestione rapida</h3>
-                <p>Controlla stato, marca pagata, avvia verifica e pulizia massiva.</p>
-              </div>
-              <span class="pill">Step 2</span>
-            </div>
-
-            <div class="field">
-              <label for="invoiceId">Invoice ID</label>
-              <input id="invoiceId" type="text" placeholder="UUID fattura" />
-            </div>
-
-            <div class="field">
-              <label for="paidCurrency">Valuta pagata</label>
-              <select id="paidCurrency">
-                <option value="USDT">USDT</option>
-                <option value="BTC">BTC</option>
-                <option value="ETH">ETH</option>
+          <div class="field" style="margin-top: 12px">
+            <label>Transazioni recenti</label>
+            <div class="toolbar" style="margin-top: 8px">
+              <input id="txSearchInput" class="input" type="text" placeholder="Cerca hash tx / TX-... / INV-..." />
+              <select id="txStatusFilter" class="select">
+                <option value="all">Tutti gli stati transazione</option>
+                <option value="awaiting_payment">in attesa pagamento</option>
+                <option value="pending_confirmation">in attesa conferme</option>
+                <option value="confirmed">confermata</option>
+                <option value="cancelled">annullata</option>
+                <option value="expired">scaduta</option>
               </select>
+              <button id="txSearchBtn" class="btn btn-secondary" type="button">Filtra tx</button>
+              <button id="txResetBtn" class="btn btn-ghost" type="button">Azzera filtri tx</button>
+              <button id="exportTxBtn" class="btn btn-ghost" type="button">Esporta tx CSV</button>
             </div>
+            <div id="transactionsList" class="tx-list"></div>
+          </div>
 
-            <div class="field">
-              <label for="txHash">TX hash (opzionale)</label>
-              <input id="txHash" type="text" placeholder="Hash transazione" />
+          <div class="field" style="margin-top: 12px">
+            <label>Dettaglio transazione</label>
+            <div class="toolbar" style="margin-top: 8px">
+              <input id="txRefInput" class="input" type="text" placeholder="Inserisci TX-... oppure hash tx" />
+              <button id="txLookupBtn" class="btn btn-secondary" type="button">Apri dettaglio</button>
             </div>
+            <div id="txDetailCard" class="tx-list"></div>
+          </div>
+        </article>
+      </section>
 
-            <div class="actions">
-              <button id="statusBtn" class="btn-secondary" type="button">Stato</button>
-              <button id="markPaidBtn" class="btn-primary" type="button">Segna pagata</button>
-              <button id="verifyNowBtn" class="btn-ghost" type="button">Verifica ora</button>
-            </div>
-
-            <div class="actions">
-              <button id="deleteAllBtn" class="btn-danger" type="button">Elimina tutte</button>
-            </div>
-
-            <div id="manageResult" class="result-box hidden"></div>
-          </article>
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h3>Monitor Rischi</h3>
+            <p>Alert automatici su incoerenze stato, hash, importi e latenza operativa.</p>
+          </div>
+          <span id="riskTotalBadge" class="pill">0 avvisi</span>
         </div>
+
+        <div class="toolbar">
+          <button id="riskRefreshBtn" class="btn btn-secondary" type="button">Aggiorna rischi</button>
+        </div>
+
+        <div id="riskSummary" class="kv" style="margin-top: 10px"></div>
+        <div id="riskAlerts" class="tx-list"></div>
       </section>
     </main>
 
-    <script>
-      const controls = {
-        createBtn: document.getElementById("createBtn"),
-        statusBtn: document.getElementById("statusBtn"),
-        markPaidBtn: document.getElementById("markPaidBtn"),
-        verifyNowBtn: document.getElementById("verifyNowBtn"),
-        deleteAllBtn: document.getElementById("deleteAllBtn"),
-      };
-
-      function getApiKey() {
-        return document.getElementById("apiKey").value.trim();
-      }
-
-      function setResult(id, content, isError = false) {
-        const el = document.getElementById(id);
-        el.classList.remove("hidden");
-        el.classList.toggle("error", Boolean(isError));
-        el.textContent = content;
-      }
-
-      function selectedCurrencies() {
-        return [...document.querySelectorAll('.currency-checks input[type="checkbox"]:checked')].map(
-          (item) => item.value,
-        );
-      }
-
-      function setBusy(button, busy, busyText) {
-        if (!button) return;
-        if (busy) {
-          button.dataset.originalText = button.textContent;
-          button.textContent = busyText;
-          button.disabled = true;
-          return;
-        }
-        button.textContent = button.dataset.originalText || button.textContent;
-        button.disabled = false;
-      }
-
-      function normalizeAmount(rawValue) {
-        return Number(String(rawValue || "").trim().replace(",", "."));
-      }
-
-      function ensureApiKey(resultId) {
-        if (getApiKey()) {
-          return true;
-        }
-        setResult(resultId, "Inserisci prima la API key admin.", true);
-        return false;
-      }
-
-      async function parseJsonResponse(response) {
-        let data = {};
-        try {
-          data = await response.json();
-        } catch (_error) {
-          data = {};
-        }
-
-        if (!response.ok) {
-          throw new Error(data.message || `Errore HTTP ${response.status}`);
-        }
-
-        return data;
-      }
-
-      async function createInvoice() {
-        if (!ensureApiKey("createResult")) {
-          return;
-        }
-
-        const amountUsd = normalizeAmount(document.getElementById("amountUsd").value);
-        const telegramUserId = document.getElementById("telegramUserId").value.trim();
-        const allowedCurrencies = selectedCurrencies();
-
-        if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
-          setResult("createResult", "Importo USD non valido.", true);
-          return;
-        }
-
-        if (!allowedCurrencies.length) {
-          setResult("createResult", "Seleziona almeno una valuta.", true);
-          return;
-        }
-
-        setBusy(controls.createBtn, true, "Creazione...");
-        try {
-          const response = await fetch("/api/invoices", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-api-key": getApiKey(),
-            },
-            body: JSON.stringify({
-              amount_usd: amountUsd,
-              telegram_user_id: telegramUserId || null,
-              allowed_currencies: allowedCurrencies,
-            }),
-          });
-
-          const data = await parseJsonResponse(response);
-          const invoice = data.invoice;
-          setResult(
-            "createResult",
-            `Fattura creata\nID: ${invoice.id}\nScadenza: ${new Date(invoice.expiresAt).toLocaleString("it-IT")}\nLink: ${invoice.paymentUrl}`,
-          );
-          document.getElementById("invoiceId").value = invoice.id;
-        } finally {
-          setBusy(controls.createBtn, false);
-        }
-      }
-
-      async function checkStatus() {
-        if (!ensureApiKey("manageResult")) {
-          return;
-        }
-
-        const invoiceId = document.getElementById("invoiceId").value.trim();
-        if (!invoiceId) {
-          setResult("manageResult", "Inserisci Invoice ID.", true);
-          return;
-        }
-
-        setBusy(controls.statusBtn, true, "Carico...");
-        try {
-          const response = await fetch(`/api/invoices/id/${invoiceId}/status`, {
-            headers: {
-              "x-api-key": getApiKey(),
-            },
-          });
-
-          const data = await parseJsonResponse(response);
-          const status = data.status;
-          setResult(
-            "manageResult",
-            `Stato: ${status.status}\nImporto: ${status.amountUsd.toFixed(2)} USD\nScadenza: ${new Date(status.expiresAt).toLocaleString("it-IT")}\nLink: ${status.paymentUrl}`,
-          );
-        } finally {
-          setBusy(controls.statusBtn, false);
-        }
-      }
-
-      async function markPaid() {
-        if (!ensureApiKey("manageResult")) {
-          return;
-        }
-
-        const invoiceId = document.getElementById("invoiceId").value.trim();
-        if (!invoiceId) {
-          setResult("manageResult", "Inserisci Invoice ID.", true);
-          return;
-        }
-
-        setBusy(controls.markPaidBtn, true, "Aggiorno...");
-        try {
-          const response = await fetch(`/api/invoices/${invoiceId}/mark-paid`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-api-key": getApiKey(),
-            },
-            body: JSON.stringify({
-              currency: document.getElementById("paidCurrency").value,
-              tx_hash: document.getElementById("txHash").value.trim() || null,
-              confirmations: 1,
-            }),
-          });
-
-          const data = await parseJsonResponse(response);
-          if (data.changed) {
-            setResult(
-              "manageResult",
-              `Pagamento registrato\nInvoice: ${data.invoice.id}\nNuovo stato: ${data.invoice.status}`,
-            );
-          } else {
-            setResult(
-              "manageResult",
-              `Nessuna modifica\nStato attuale: ${data.invoice.status}\nMotivo: ${data.reason || "n/a"}`,
-            );
-          }
-        } finally {
-          setBusy(controls.markPaidBtn, false);
-        }
-      }
-
-      async function verifyNow() {
-        if (!ensureApiKey("manageResult")) {
-          return;
-        }
-
-        setBusy(controls.verifyNowBtn, true, "Verifico...");
-        try {
-          const response = await fetch("/api/payments/verify-now", {
-            method: "POST",
-            headers: {
-              "x-api-key": getApiKey(),
-            },
-          });
-
-          const data = await parseJsonResponse(response);
-          setResult(
-            "manageResult",
-            `Verifica completata\nControllate: ${data.summary.checked}\nPagate: ${data.summary.paid}\nErrori: ${data.summary.errors.length}`,
-          );
-        } finally {
-          setBusy(controls.verifyNowBtn, false);
-        }
-      }
-
-      async function deleteAllInvoices() {
-        if (!ensureApiKey("manageResult")) {
-          return;
-        }
-
-        const confirmed = window.confirm(
-          "Sei sicuro di eliminare TUTTE le fatture? Questa azione non puo essere annullata.",
-        );
-        if (!confirmed) {
-          return;
-        }
-
-        setBusy(controls.deleteAllBtn, true, "Elimino...");
-        try {
-          const response = await fetch("/api/invoices/delete-all", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-api-key": getApiKey(),
-            },
-            body: JSON.stringify({
-              confirm: "DELETE_ALL",
-            }),
-          });
-
-          const data = await parseJsonResponse(response);
-          setResult(
-            "manageResult",
-            `Eliminazione completata\nInvoice eliminate: ${data.summary.deletedInvoices}\nPagamenti eliminati: ${data.summary.deletedPayments}`,
-          );
-        } finally {
-          setBusy(controls.deleteAllBtn, false);
-        }
-      }
-
-      controls.createBtn.addEventListener("click", async () => {
-        try {
-          await createInvoice();
-        } catch (error) {
-          setResult("createResult", error.message, true);
-        }
-      });
-
-      controls.statusBtn.addEventListener("click", async () => {
-        try {
-          await checkStatus();
-        } catch (error) {
-          setResult("manageResult", error.message, true);
-        }
-      });
-
-      controls.markPaidBtn.addEventListener("click", async () => {
-        try {
-          await markPaid();
-        } catch (error) {
-          setResult("manageResult", error.message, true);
-        }
-      });
-
-      controls.verifyNowBtn.addEventListener("click", async () => {
-        try {
-          await verifyNow();
-        } catch (error) {
-          setResult("manageResult", error.message, true);
-        }
-      });
-
-      controls.deleteAllBtn.addEventListener("click", async () => {
-        try {
-          await deleteAllInvoices();
-        } catch (error) {
-          setResult("manageResult", error.message, true);
-        }
-      });
-    </script>
+    <div id="toast" class="toast hidden"></div>
+    <script src="/static/admin.js"></script>
   </body>
 </html>

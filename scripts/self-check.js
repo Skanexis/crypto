@@ -35,6 +35,10 @@ function assert(condition, message) {
 }
 
 async function run() {
+  const tx1 = `0x${"1".repeat(64)}`;
+  const tx2 = `0x${"2".repeat(64)}`;
+  const tx3 = `0x${"3".repeat(64)}`;
+
   const invA = await createInvoice({
     amountUsd: 100,
     allowedCurrencies: ["ETH", "BTC"],
@@ -58,7 +62,7 @@ async function run() {
   const paid1 = markInvoicePaid({
     invoiceId: invA.id,
     currency: "ETH",
-    txHash: "0xselfcheck0001",
+    txHash: tx1,
     confirmations: 3,
     paidAmountCrypto: amountA,
   });
@@ -67,7 +71,7 @@ async function run() {
   const paid2 = markInvoicePaid({
     invoiceId: invA.id,
     currency: "ETH",
-    txHash: "0xselfcheck0001",
+    txHash: tx1,
     confirmations: 3,
     paidAmountCrypto: amountA,
   });
@@ -78,7 +82,7 @@ async function run() {
     invoiceId: invA.id,
     currency: "ETH",
     status: "confirmed",
-    txHash: "0xselfcheck0001",
+    txHash: tx1,
     confirmations: 6,
     amount: amountA,
   });
@@ -98,7 +102,7 @@ async function run() {
   const withinGrace = markInvoicePaid({
     invoiceId: invGrace.id,
     currency: "ETH",
-    txHash: "0xselfcheck0002",
+    txHash: tx2,
     confirmations: 3,
     paidAmountCrypto: graceAmount,
   });
@@ -118,12 +122,31 @@ async function run() {
   const outsideGrace = markInvoicePaid({
     invoiceId: invExpired.id,
     currency: "ETH",
-    txHash: "0xselfcheck0003",
+    txHash: tx3,
     confirmations: 3,
     paidAmountCrypto: expiredAmount,
   });
   assert(outsideGrace.changed === false, "Invoice outside grace should not be payable");
   assert(outsideGrace.reason === "invoice_expired", "Expected invoice_expired reason");
+
+  const invNoAmount = await createInvoice({
+    amountUsd: 22,
+    allowedCurrencies: ["ETH"],
+    telegramUserId: null,
+    createdByAdminId: "self-check",
+  });
+  const noAmountPaid = markInvoicePaid({
+    invoiceId: invNoAmount.id,
+    currency: "ETH",
+    txHash: `0x${"4".repeat(64)}`,
+    confirmations: 3,
+  });
+  assert(noAmountPaid.changed === true, "Mark paid without paid amount should still confirm");
+  const noAmountPayment = noAmountPaid.invoice.payments.find((p) => p.currency === "ETH");
+  assert(
+    Number(noAmountPayment.paidAmountCrypto) === Number(noAmountPayment.expectedAmountCrypto),
+    "Paid amount should default to expected amount when missing",
+  );
 
   const body = JSON.stringify({ hello: "world" });
   const signature =

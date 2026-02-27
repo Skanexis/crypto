@@ -1,4 +1,5 @@
 const { sendMessage } = require("./telegram.service");
+const { txExplorerUrl } = require("./explorer-links.service");
 
 async function notifyInvoicePaid(invoice, currency, options = {}) {
   if (!invoice) {
@@ -11,13 +12,25 @@ async function notifyInvoicePaid(invoice, currency, options = {}) {
 
   const textLines = [
     "Pagamento confermato.",
-    `Fattura: ${invoice.id}`,
+    `Fattura: ${invoice.shortId || invoice.id}`,
+    `ID tecnico: ${invoice.id}`,
     `Importo: ${Number(invoice.amountUsd).toFixed(2)} USD`,
     `Valuta: ${normalizedCurrency}`,
     `Origine verifica: ${source}`,
   ];
   if (txHash) {
     textLines.push(`Tx: ${txHash}`);
+    const payment = (invoice.payments || []).find(
+      (item) => String(item.currency || "").toUpperCase() === normalizedCurrency,
+    );
+    const explorer = txExplorerUrl({
+      currency: normalizedCurrency,
+      network: payment?.network || null,
+      txHash,
+    });
+    if (explorer) {
+      textLines.push(`Explorer: ${explorer}`);
+    }
   }
   const text = textLines.join("\n");
 

@@ -8,7 +8,7 @@ const {
 
 function isValidWebhookSignature(rawBody, signature) {
   if (!config.webhookHmacSecret) {
-    return true;
+    return false;
   }
   if (!signature || !rawBody) {
     return false;

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS invoices (
   id TEXT PRIMARY KEY,
+  short_id TEXT UNIQUE,
   public_token TEXT NOT NULL UNIQUE,
   amount_usd REAL NOT NULL,
   allowed_currencies TEXT NOT NULL,
@@ -35,6 +36,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
+  short_id TEXT UNIQUE,
   invoice_id TEXT NOT NULL,
   currency TEXT NOT NULL,
   network TEXT NOT NULL,
@@ -63,6 +65,34 @@ CREATE INDEX IF NOT EXISTS idx_invoices_expires_status ON invoices (expires_at, 
 CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON payments (invoice_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_tx_hash_unique ON payments (tx_hash) WHERE tx_hash IS NOT NULL;
 `);
+
+function hasColumn(tableName, columnName) {
+  const rows = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  return rows.some((row) => row.name === columnName);
+}
+
+function ensureColumn(tableName, columnName, sqlType) {
+  if (hasColumn(tableName, columnName)) {
+    return;
+  }
+  db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${sqlType}`);
+}
+
+function runMigrations() {
+  ensureColumn("invoices", "short_id", "TEXT");
+  ensureColumn("payments", "short_id", "TEXT");
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_short_id_unique
+      ON invoices (short_id) WHERE short_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_short_id_unique
+      ON payments (short_id) WHERE short_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_events_entity_created
+      ON events (entity_type, entity_id, created_at DESC);
+  `);
+}
+
+runMigrations();
 
 function nowIso() {
   return new Date().toISOString();

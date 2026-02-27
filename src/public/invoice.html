@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Checkout Pagamento</title>
+    <title>Pagamento Fattura</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -13,281 +13,74 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="app fade-in">
+    <main class="client-shell">
       <header class="hero">
-        <div class="hero-head">
+        <div class="hero-top">
           <div>
-            <span class="eyebrow">Secure Checkout</span>
+            <span class="eyebrow">Checkout Sicuro</span>
             <h1>Pagamento fattura</h1>
             <p>
-              Invia l'importo esatto con il metodo desiderato. Il sistema aggiorna automaticamente lo stato dopo la
-              conferma on-chain.
+              Invia l'importo esatto utilizzando rete e valuta indicate. Lo stato si aggiorna automaticamente dopo la
+              conferma blockchain.
             </p>
+            <div class="hero-chips">
+              <span class="chip">Rif: <strong id="invoiceRef">-</strong></span>
+              <span class="chip">Importo: <strong id="usdAmount">-</strong></span>
+              <span class="chip">Scadenza: <strong id="expiresAt">-</strong></span>
+              <span class="chip">Tempo: <strong id="countdown">-</strong></span>
+            </div>
           </div>
-          <div class="hero-side">
-            <span id="statusBadge" class="status pending">In attesa</span>
-            <small>Rilevamento automatico transazione</small>
+          <div class="hero-cta">
+            <span id="invoiceBadge" class="badge pending">in attesa</span>
+            <small>Controllo on-chain attivo</small>
           </div>
-        </div>
-        <div class="hero-chips">
-          <span class="chip">Importo: <strong id="usdAmount">-</strong></span>
-          <span class="chip">Scadenza: <strong id="expiresAt">-</strong></span>
-          <span class="chip">Tempo: <strong id="countdown">-</strong></span>
         </div>
       </header>
 
-      <section class="content">
-        <div class="pay-grid">
-          <section class="card">
-            <div class="pay-header">
-              <h3>Metodi di pagamento</h3>
-              <span class="pill">Invio esatto richiesto</span>
-            </div>
+      <section class="client-frame">
+        <div class="client-head">
+          <div>
+            <h3>Dettagli transazione</h3>
+            <p>Utilizza i pulsanti di copia per evitare errori.</p>
+          </div>
+          <span id="statusHintBadge" class="badge pending">in attesa</span>
+        </div>
 
-            <div id="statusHint" class="notice">Invia il pagamento e attendi la conferma blockchain.</div>
-            <div id="currencyList" class="method-list"></div>
-            <div id="finalMessage" class="notice hidden"></div>
-          </section>
+        <div class="client-body">
+          <div id="statusHint" class="notice">Invia il pagamento e attendi la conferma di rete.</div>
 
-          <aside class="card">
-            <div class="card-head">
-              <div>
-                <h3>Riepilogo</h3>
-                <p>Dati principali della fattura</p>
-              </div>
-              <span class="pill">Dettagli</span>
-            </div>
+          <div class="client-grid">
+            <section>
+              <div id="walletCards" class="stack"></div>
+            </section>
 
-            <div class="summary-list">
-              <div class="summary-item">
-                <small>Invoice token</small>
-                <strong id="invoiceToken" class="mono">-</strong>
+            <aside>
+              <div class="stack">
+                <div class="copy-field">
+                  <small>UUID fattura</small>
+                  <strong id="invoiceId" class="mono">-</strong>
+                </div>
+                <div class="copy-field">
+                  <small>Token fattura</small>
+                  <strong id="invoiceToken" class="mono">-</strong>
+                </div>
+                <div class="copy-field">
+                  <small>Ultimo aggiornamento</small>
+                  <strong id="updatedAt">-</strong>
+                </div>
+                <div class="copy-field">
+                  <small>Valute abilitate</small>
+                  <strong id="currenciesText">-</strong>
+                </div>
+                <div id="finalMessage" class="notice hidden"></div>
               </div>
-              <div class="summary-item">
-                <small>Valute abilitate</small>
-                <strong id="currenciesText">-</strong>
-              </div>
-              <div class="summary-item">
-                <small>Ultimo aggiornamento</small>
-                <strong id="updatedAt">-</strong>
-              </div>
-            </div>
-
-            <div class="notice warn">Usa solo rete e valuta indicate per il riconoscimento automatico.</div>
-          </aside>
+            </aside>
+          </div>
         </div>
       </section>
     </main>
 
     <div id="toast" class="toast hidden"></div>
-
-    <script>
-      const token = window.location.pathname.split("/").filter(Boolean).pop();
-      const state = {
-        invoice: null,
-        countdownTimer: null,
-        pollTimer: null,
-        toastTimer: null,
-      };
-
-      function formatDate(value) {
-        return new Date(value).toLocaleString("it-IT");
-      }
-
-      function formatCountdown(ms) {
-        if (ms <= 0) return "scaduta";
-        const total = Math.floor(ms / 1000);
-        const hh = Math.floor(total / 3600)
-          .toString()
-          .padStart(2, "0");
-        const mm = Math.floor((total % 3600) / 60)
-          .toString()
-          .padStart(2, "0");
-        const ss = Math.floor(total % 60)
-          .toString()
-          .padStart(2, "0");
-        return `${hh}:${mm}:${ss}`;
-      }
-
-      function showToast(message) {
-        const toast = document.getElementById("toast");
-        toast.textContent = message;
-        toast.classList.remove("hidden");
-        clearTimeout(state.toastTimer);
-        state.toastTimer = setTimeout(() => toast.classList.add("hidden"), 1700);
-      }
-
-      function setStatus(status) {
-        const badge = document.getElementById("statusBadge");
-        const hint = document.getElementById("statusHint");
-        badge.className = `status ${status}`;
-
-        if (status === "paid") {
-          badge.textContent = "Pagata";
-          hint.className = "notice ok";
-          hint.textContent = "Pagamento confermato. Operazione completata con successo.";
-          return;
-        }
-        if (status === "expired") {
-          badge.textContent = "Scaduta";
-          hint.className = "notice warn";
-          hint.textContent = "La fattura e scaduta. Richiedi una nuova fattura all'amministratore.";
-          return;
-        }
-        if (status === "cancelled") {
-          badge.textContent = "Annullata";
-          hint.className = "notice warn";
-          hint.textContent = "La fattura e stata annullata.";
-          return;
-        }
-
-        badge.textContent = "In attesa";
-        hint.className = "notice";
-        hint.textContent = "Invia il pagamento e attendi la conferma blockchain.";
-      }
-
-      async function copyToClipboard(value) {
-        try {
-          await navigator.clipboard.writeText(value);
-          showToast("Indirizzo copiato");
-        } catch (_error) {
-          showToast("Copia non riuscita");
-        }
-      }
-
-      function renderPayments(payments, invoiceStatus) {
-        const root = document.getElementById("currencyList");
-        root.innerHTML = "";
-
-        payments.forEach((payment) => {
-          const wrap = document.createElement("article");
-          wrap.className = "method-card";
-
-          const isConfirmed = payment.status === "confirmed";
-          const payStatus = isConfirmed ? "Confermato" : "In attesa";
-          const payClass = isConfirmed ? "paid" : "pending";
-
-          wrap.innerHTML = `
-            <div class="method-main">
-              <div class="method-head">
-                <div class="method-title">
-                  <h4>${payment.currency}</h4>
-                  <span class="method-network">${payment.network}</span>
-                </div>
-                <span class="status ${payClass}">${payStatus}</span>
-              </div>
-
-              <div class="amount-box">
-                <small>Importo esatto da inviare</small>
-                <strong class="mono">${payment.expectedAmountCrypto} ${payment.currency}</strong>
-              </div>
-
-              <div>
-                <small style="color: var(--ink-soft); font-size: 0.75rem; font-weight: 700">Indirizzo wallet</small>
-                <div class="wallet-box mono">${payment.walletAddress}</div>
-              </div>
-
-              <div class="actions">
-                <button class="btn-secondary" type="button">Copia indirizzo</button>
-                <button class="btn-primary" type="button">Apri wallet</button>
-              </div>
-            </div>
-            <div class="qr-box">
-              <img src="${payment.qrDataUrl}" alt="QR ${payment.currency}" />
-            </div>
-          `;
-
-          const [copyBtn, openBtn] = wrap.querySelectorAll("button");
-          copyBtn.addEventListener("click", () => copyToClipboard(payment.walletAddress));
-          openBtn.addEventListener("click", () => {
-            const uri = String(payment.qrText || "");
-            if (
-              uri.startsWith("bitcoin:") ||
-              uri.startsWith("ethereum:") ||
-              uri.startsWith("tron:") ||
-              uri.startsWith("http://") ||
-              uri.startsWith("https://")
-            ) {
-              window.location.href = uri;
-              return;
-            }
-            copyToClipboard(payment.walletAddress);
-            showToast("Indirizzo copiato");
-          });
-
-          if (invoiceStatus !== "pending") {
-            copyBtn.disabled = true;
-            openBtn.disabled = true;
-          }
-
-          root.appendChild(wrap);
-        });
-      }
-
-      function refreshCountdown() {
-        if (!state.invoice) return;
-        const remaining = new Date(state.invoice.expiresAt).getTime() - Date.now();
-        document.getElementById("countdown").textContent = formatCountdown(remaining);
-      }
-
-      function applyInvoice(invoice) {
-        state.invoice = invoice;
-        document.getElementById("usdAmount").textContent = `${invoice.amountUsd.toFixed(2)} USD`;
-        document.getElementById("expiresAt").textContent = formatDate(invoice.expiresAt);
-        document.getElementById("invoiceToken").textContent = invoice.token;
-        document.getElementById("currenciesText").textContent = invoice.allowedCurrencies.join(", ");
-        document.getElementById("updatedAt").textContent = formatDate(invoice.updatedAt);
-
-        setStatus(invoice.status);
-        renderPayments(invoice.payments, invoice.status);
-        refreshCountdown();
-
-        const final = document.getElementById("finalMessage");
-        if (invoice.status === "paid") {
-          final.className = "notice ok";
-          final.textContent = "Pagamento ricevuto. Puoi chiudere la pagina.";
-          final.classList.remove("hidden");
-        } else if (invoice.status === "expired") {
-          final.className = "notice warn";
-          final.textContent = "Fattura scaduta. Richiedi una nuova fattura.";
-          final.classList.remove("hidden");
-        } else {
-          final.className = "notice hidden";
-          final.textContent = "";
-        }
-      }
-
-      async function loadInvoice() {
-        const response = await fetch(`/api/invoices/${token}`);
-        if (!response.ok) {
-          throw new Error("Fattura non trovata");
-        }
-        const data = await response.json();
-        applyInvoice(data.invoice);
-      }
-
-      async function bootstrap() {
-        try {
-          await loadInvoice();
-
-          state.countdownTimer = setInterval(refreshCountdown, 1000);
-          state.pollTimer = setInterval(async () => {
-            try {
-              await loadInvoice();
-              if (state.invoice.status !== "pending") {
-                clearInterval(state.pollTimer);
-              }
-            } catch (_error) {
-              // no-op
-            }
-          }, 10000);
-        } catch (error) {
-          const section = document.querySelector(".card");
-          section.innerHTML = `<div class="notice warn">Errore: ${error.message}</div>`;
-        }
-      }
-
-      bootstrap();
-    </script>
+    <script src="/static/invoice.js"></script>
   </body>
 </html>

@@ -1,4 +1,5 @@
 const config = require("../config");
+const { logEvent } = require("../db");
 const {
   listPendingPaymentsForCurrencies,
   markInvoicePaid,
@@ -402,7 +403,7 @@ async function verifyBtcPayments() {
 
 async function verifyPendingPayments() {
   if (verifierInProgress) {
-    return {
+    const skippedSummary = {
       ranAt: new Date().toISOString(),
       autoVerifyEnabled: Boolean(config.autoVerifyPayments),
       results: [],
@@ -412,6 +413,8 @@ async function verifyPendingPayments() {
       skipped: true,
       reason: "verifier already running",
     };
+    logEvent("system", "payment_verifier", "run_skipped", skippedSummary);
+    return skippedSummary;
   }
 
   verifierInProgress = true;
@@ -438,6 +441,15 @@ async function verifyPendingPayments() {
         summary.errors.push(...item.errors);
       }
     }
+
+    logEvent("system", "payment_verifier", "run", {
+      ranAt: summary.ranAt,
+      checked: summary.checked,
+      paid: summary.paid,
+      errors: summary.errors.slice(0, 25),
+      skipped: false,
+      autoVerifyEnabled: summary.autoVerifyEnabled,
+    });
 
     return summary;
   } finally {

@@ -2,6 +2,10 @@ const path = require("path");
 const express = require("express");
 const apiRoutes = require("./routes/api.routes");
 const telegramRoutes = require("./routes/telegram.routes");
+const {
+  getInvoiceWithPaymentsByToken,
+  isInvoiceExpired,
+} = require("./services/invoices.service");
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
@@ -34,7 +38,18 @@ app.get("/admin", (_req, res) => {
   res.sendFile(path.join(publicDir, "admin.html"));
 });
 
-app.get("/pay/:token", (_req, res) => {
+app.get("/pay/:token", (req, res) => {
+  const invoice = getInvoiceWithPaymentsByToken(req.params.token);
+  if (!invoice) {
+    res.status(404).sendFile(path.join(publicDir, "invoice-unavailable.html"));
+    return;
+  }
+
+  if (isInvoiceExpired(invoice)) {
+    res.status(410).sendFile(path.join(publicDir, "invoice-unavailable.html"));
+    return;
+  }
+
   res.sendFile(path.join(publicDir, "invoice.html"));
 });
 
