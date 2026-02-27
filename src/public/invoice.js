@@ -246,9 +246,6 @@ function renderUnavailable(message) {
         <span class="eyebrow">Fattura non disponibile</span>
         <h2>Pagamento non disponibile</h2>
         <p>${escapeHtml(message)}</p>
-        <div class="actions">
-          <a href="/" class="btn btn-primary">Torna alla dashboard</a>
-        </div>
       </section>
     </main>
   `;

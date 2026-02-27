@@ -997,6 +997,186 @@ function toEventDto(row) {
   };
 }
 
+function firstNonEmpty(values) {
+  for (const value of values) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+    const text = String(value).trim();
+    if (text) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function mapEventRowsWithReferences(rows) {
+  const invoiceIds = new Set();
+  const paymentIds = new Set();
+
+  for (const row of rows) {
+    if (row.entity_type === "invoice" && row.entity_id && row.entity_id !== "*") {
+      invoiceIds.add(row.entity_id);
+    }
+    if (row.entity_type === "payment" && row.entity_id) {
+      paymentIds.add(row.entity_id);
+    }
+  }
+
+  const invoiceMap = new Map();
+  if (invoiceIds.size > 0) {
+    const ids = [...invoiceIds];
+    const placeholders = ids.map(() => "?").join(", ");
+    const invoiceRows = db
+      .prepare(
+        `
+          SELECT id, short_id, telegram_user_id, created_by_admin_id, amount_usd, status
+          FROM invoices
+          WHERE id IN (${placeholders})
+        `,
+      )
+      .all(...ids);
+
+    for (const invoice of invoiceRows) {
+      invoiceMap.set(invoice.id, {
+        id: invoice.id,
+        shortId: invoice.short_id || null,
+        telegramUserId: invoice.telegram_user_id || null,
+        createdByAdminId: invoice.created_by_admin_id || null,
+        amountUsd: Number(invoice.amount_usd || 0),
+        status: invoice.status || null,
+      });
+    }
+  }
+
+  const paymentMap = new Map();
+  if (paymentIds.size > 0) {
+    const ids = [...paymentIds];
+    const placeholders = ids.map(() => "?").join(", ");
+    const paymentRows = db
+      .prepare(
+        `
+          SELECT
+            p.id,
+            p.short_id,
+            p.invoice_id,
+            p.currency,
+            p.network,
+            p.wallet_address,
+            p.expected_amount_crypto,
+            p.paid_amount_crypto,
+            p.tx_hash,
+            p.confirmations,
+            p.status,
+            i.short_id AS invoice_short_id
+          FROM payments p
+          LEFT JOIN invoices i ON i.id = p.invoice_id
+          WHERE p.id IN (${placeholders})
+        `,
+      )
+      .all(...ids);
+
+    for (const payment of paymentRows) {
+      paymentMap.set(payment.id, {
+        id: payment.id,
+        shortId: payment.short_id || null,
+        invoiceId: payment.invoice_id || null,
+        invoiceShortId: payment.invoice_short_id || null,
+        currency: payment.currency || null,
+        network: payment.network || null,
+        walletAddress: payment.wallet_address || null,
+        expectedAmountCrypto:
+          payment.expected_amount_crypto !== null && payment.expected_amount_crypto !== undefined
+            ? Number(payment.expected_amount_crypto)
+            : null,
+        paidAmountCrypto:
+          payment.paid_amount_crypto !== null && payment.paid_amount_crypto !== undefined
+            ? Number(payment.paid_amount_crypto)
+            : null,
+        txHash: payment.tx_hash || null,
+        confirmations: Number(payment.confirmations || 0),
+        txStatus: payment.status || null,
+      });
+    }
+  }
+
+  return rows.map((row) => {
+    const event = toEventDto(row);
+    const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
+
+    if (event.entityType === "invoice") {
+      const invoice = invoiceMap.get(event.entityId);
+      return {
+        ...event,
+        entityShortId:
+          firstNonEmpty([invoice?.shortId, payload.invoiceShortId, payload.invoiceRef]) || null,
+        invoiceId: firstNonEmpty([invoice?.id, event.entityId, payload.invoiceId]) || null,
+        invoiceShortId:
+          firstNonEmpty([invoice?.shortId, payload.invoiceShortId, payload.invoiceRef]) || null,
+        invoiceStatus: firstNonEmpty([invoice?.status, payload.status, payload.newStatus]) || null,
+        amountUsd:
+          firstNonEmpty([payload.amountUsd, invoice?.amountUsd]) !== null
+            ? Number(firstNonEmpty([payload.amountUsd, invoice?.amountUsd]))
+            : null,
+        createdByAdminId:
+          firstNonEmpty([payload.createdByAdminId, invoice?.createdByAdminId]) || null,
+        telegramUserId:
+          firstNonEmpty([payload.telegramUserId, invoice?.telegramUserId]) || null,
+      };
+    }
+
+    if (event.entityType === "payment") {
+      const payment = paymentMap.get(event.entityId);
+      const txHash = firstNonEmpty([payload.txHash, payload.tx_hash, payment?.txHash]);
+      return {
+        ...event,
+        entityShortId: firstNonEmpty([payment?.shortId, payload.paymentShortId]) || null,
+        invoiceId: firstNonEmpty([payment?.invoiceId, payload.invoiceId]) || null,
+        invoiceShortId:
+          firstNonEmpty([payment?.invoiceShortId, payload.invoiceShortId, payload.invoiceRef]) ||
+          null,
+        txId: firstNonEmpty([payment?.id, event.entityId]) || null,
+        txShortId: firstNonEmpty([payment?.shortId, payload.paymentShortId]) || null,
+        txHash: txHash ? String(txHash).trim().toLowerCase() : null,
+        currency: firstNonEmpty([payload.currency, payment?.currency]) || null,
+        network: firstNonEmpty([payload.network, payment?.network]) || null,
+        walletAddress:
+          firstNonEmpty([payload.walletAddress, payload.wallet_address, payment?.walletAddress]) ||
+          null,
+        expectedAmountCrypto:
+          firstNonEmpty([payload.expectedAmountCrypto, payment?.expectedAmountCrypto]) !== null
+            ? Number(firstNonEmpty([payload.expectedAmountCrypto, payment?.expectedAmountCrypto]))
+            : null,
+        paidAmountCrypto:
+          firstNonEmpty([payload.paidAmountCrypto, payment?.paidAmountCrypto]) !== null
+            ? Number(firstNonEmpty([payload.paidAmountCrypto, payment?.paidAmountCrypto]))
+            : null,
+        confirmations:
+          firstNonEmpty([payload.confirmations, payment?.confirmations]) !== null
+            ? Number(firstNonEmpty([payload.confirmations, payment?.confirmations]))
+            : 0,
+        txStatus: firstNonEmpty([payload.status, payment?.txStatus]) || null,
+      };
+    }
+
+    return {
+      ...event,
+      entityShortId: firstNonEmpty([payload.invoiceShortId, payload.paymentShortId]) || null,
+      invoiceShortId: firstNonEmpty([payload.invoiceShortId, payload.invoiceRef]) || null,
+      txShortId: firstNonEmpty([payload.paymentShortId, payload.txShortId]) || null,
+      txHash: firstNonEmpty([payload.txHash, payload.tx_hash]) || null,
+      currency: firstNonEmpty([payload.currency]) || null,
+      network: firstNonEmpty([payload.network]) || null,
+      walletAddress: firstNonEmpty([payload.walletAddress, payload.wallet_address]) || null,
+      confirmations:
+        firstNonEmpty([payload.confirmations]) !== null
+          ? Number(firstNonEmpty([payload.confirmations]))
+          : 0,
+      txStatus: firstNonEmpty([payload.status]) || null,
+    };
+  });
+}
+
 function listRecentEvents(limit = 100) {
   const max = Math.max(1, Math.min(1000, Number(limit || 100)));
   const rows = db
@@ -1010,7 +1190,7 @@ function listRecentEvents(limit = 100) {
     )
     .all(max);
 
-  return rows.map(toEventDto);
+  return mapEventRowsWithReferences(rows);
 }
 
 function listInvoiceEventsByRef(invoiceRef, limit = 120) {
@@ -1050,21 +1230,18 @@ function listInvoiceEventsByRef(invoiceRef, limit = 120) {
     )
     .all(...params, max);
 
-  const paymentMap = new Map(invoice.payments.map((payment) => [payment.id, payment]));
-  return rows.map((row) => {
-    const event = toEventDto(row);
+  const baseEvents = mapEventRowsWithReferences(rows);
+  return baseEvents.map((event) => {
     if (event.entityType === "invoice") {
       return {
         ...event,
-        entityShortId: invoice.shortId,
+        entityShortId: event.entityShortId || invoice.shortId,
+        invoiceShortId: event.invoiceShortId || invoice.shortId,
       };
     }
-
-    const payment = paymentMap.get(event.entityId);
     return {
       ...event,
-      entityShortId: payment?.shortId || null,
-      invoiceShortId: invoice.shortId,
+      invoiceShortId: event.invoiceShortId || invoice.shortId,
     };
   });
 }

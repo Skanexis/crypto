@@ -31,6 +31,61 @@
     return Boolean(search) || status !== "all";
   }
 
+  function toTs(value) {
+    const timestamp = new Date(value || 0).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  function txStatusRank(status) {
+    const key = String(status || "").toLowerCase();
+    if (key === "confirmed") return 5;
+    if (key === "pending_confirmation") return 4;
+    if (key === "awaiting_payment") return 3;
+    if (key === "cancelled") return 2;
+    if (key === "expired") return 1;
+    return 0;
+  }
+
+  function normalizeTxHash(hash) {
+    const text = String(hash || "").trim();
+    if (!text || text === "-") return "";
+    return text.toLowerCase();
+  }
+
+  function dedupeTransactions(items) {
+    const map = new Map();
+    for (const tx of items || []) {
+      const normalizedHash = normalizeTxHash(tx.txHash);
+      const key = normalizedHash
+        ? `hash:${normalizedHash}`
+        : tx.shortId
+          ? `short:${String(tx.shortId).toUpperCase()}`
+          : tx.id
+            ? `id:${tx.id}`
+            : `row:${Math.random().toString(16).slice(2)}`;
+
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          ...tx,
+          __duplicates: 1,
+        });
+        continue;
+      }
+
+      const existingScore =
+        toTs(existing.updatedAt) * 100 + Number(existing.confirmations || 0) * 10 + txStatusRank(existing.status);
+      const incomingScore =
+        toTs(tx.updatedAt) * 100 + Number(tx.confirmations || 0) * 10 + txStatusRank(tx.status);
+
+      const next = incomingScore >= existingScore ? { ...tx } : { ...existing };
+      next.__duplicates = Number(existing.__duplicates || 1) + 1;
+      map.set(key, next);
+    }
+
+    return [...map.values()].sort((a, b) => toTs(b.updatedAt) - toTs(a.updatedAt));
+  }
+
   function renderTransactions() {
     if (!els.transactionsList) return;
     if (!state.transactions.length) {
@@ -48,11 +103,20 @@
           tx.paidAmountCrypto !== null && tx.paidAmountCrypto !== undefined
             ? `${tx.paidAmountCrypto} ${tx.currency}`
             : "-";
+        const duplicateBadge =
+          Number(tx.__duplicates || 1) > 1
+            ? `<span class="pill pill-warn">Duplicata x${Number(tx.__duplicates)}</span>`
+            : "";
         return `
           <article class="tx-item">
             <div class="row">
-              <strong class="mono">${A.escapeHtml(txRef)}</strong>
-              ${A.statusBadge(tx.status)}
+              <div class="inline-actions">
+                <strong class="mono">${A.escapeHtml(txRef)}</strong>
+                ${duplicateBadge}
+              </div>
+              <div class="inline-actions">
+                ${A.statusBadge(tx.status)}
+              </div>
             </div>
             <div class="row">
               <small>${A.escapeHtml(tx.currency)} ${A.escapeHtml(tx.network)}</small>
@@ -83,6 +147,177 @@
       .join("");
   }
 
+  function actionLabel(action) {
+    const key = String(action || "").toLowerCase();
+    const map = {
+      created: "Creazione",
+      paid: "Pagamento confermato",
+      confirmed: "Transazione confermata",
+      expired: "Scadenza",
+      deleted: "Eliminazione fattura",
+      bulk_deleted: "Eliminazione massiva",
+      run: "Esecuzione job",
+      run_skipped: "Job saltato",
+      verified: "Verifica",
+    };
+    return map[key] || key || "Evento";
+  }
+
+  function actionTone(action) {
+    const key = String(action || "").toLowerCase();
+    if (key === "created") return "created";
+    if (key === "paid" || key === "confirmed") return "paid";
+    if (key === "deleted" || key === "bulk_deleted") return "danger";
+    if (key === "expired" || key === "cancelled" || key === "run_skipped") return "warn";
+    if (key === "run" || key === "verified") return "system";
+    return "neutral";
+  }
+
+  function entityLabel(entityType) {
+    const key = String(entityType || "").toLowerCase();
+    const map = {
+      invoice: "Fattura",
+      payment: "Transazione",
+      system: "Sistema",
+    };
+    return map[key] || key || "Entita";
+  }
+
+  function pickFirst(values) {
+    for (const value of values) {
+      if (value === null || value === undefined) continue;
+      const text = String(value).trim();
+      if (text) return value;
+    }
+    return null;
+  }
+
+  function formatAmount(value, currency) {
+    if (value === null || value === undefined || value === "") return "n/d";
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "n/d";
+    const fixed = Math.abs(num) >= 1 ? num.toFixed(8).replace(/\.?0+$/, "") : String(num);
+    const curr = String(currency || "").trim();
+    return curr ? `${fixed} ${curr}` : fixed;
+  }
+
+  function parseEventFacts(event) {
+    const payload =
+      event && typeof event.payload === "object" && event.payload !== null ? event.payload : {};
+
+    const entityRef = pickFirst([event.entityShortId, event.entityId, payload.entityRef, "n/d"]);
+    const invoiceRef = pickFirst([
+      event.invoiceShortId,
+      payload.invoiceShortId,
+      payload.invoiceRef,
+      payload.invoiceId,
+      "n/d",
+    ]);
+    const txRef = pickFirst([
+      event.txShortId,
+      payload.paymentShortId,
+      payload.txShortId,
+      payload.txRef,
+      event.txId,
+      "n/d",
+    ]);
+    const txHash = pickFirst([
+      event.txHash,
+      payload.txHash,
+      payload.tx_hash,
+      payload.hash,
+      "n/d",
+    ]);
+    const fromWallet = pickFirst([
+      payload.from,
+      payload.fromAddress,
+      payload.sender,
+      payload.walletFrom,
+      "n/d",
+    ]);
+    const toWallet = pickFirst([
+      payload.to,
+      payload.walletAddress,
+      payload.wallet_address,
+      payload.address,
+      payload.recipient,
+      event.walletAddress,
+      "n/d",
+    ]);
+    const currency = pickFirst([event.currency, payload.currency, payload.asset, ""]);
+    const source = pickFirst([
+      payload.source,
+      payload.provider,
+      payload.channel,
+      payload.origin,
+      "n/d",
+    ]);
+    const actor = pickFirst([
+      payload.by,
+      payload.createdByAdminId,
+      payload.actor,
+      payload.adminId,
+      payload.telegramUserId,
+      event.createdByAdminId,
+      event.telegramUserId,
+      "n/d",
+    ]);
+    const statusBefore = pickFirst([
+      payload.statusBefore,
+      payload.deletedStatusBefore,
+      payload.previousStatus,
+      "n/d",
+    ]);
+    const statusAfter = pickFirst([
+      payload.status,
+      payload.newStatus,
+      event.txStatus,
+      event.invoiceStatus,
+      "n/d",
+    ]);
+    const amountUsd = pickFirst([payload.amountUsd, event.amountUsd, null]);
+    const amountCrypto = pickFirst([
+      payload.paidAmountCrypto,
+      event.paidAmountCrypto,
+      payload.expectedAmountCrypto,
+      event.expectedAmountCrypto,
+      null,
+    ]);
+    const confirmations = pickFirst([
+      payload.confirmations,
+      event.confirmations,
+      null,
+    ]);
+
+    return {
+      id: event.id,
+      action: actionLabel(event.action),
+      actionRaw: event.action || "n/d",
+      actionTone: actionTone(event.action),
+      when: A.formatDate(event.createdAt),
+      entityType: entityLabel(event.entityType),
+      entityRef: String(entityRef || "n/d"),
+      invoiceRef: String(invoiceRef || "n/d"),
+      txRef: String(txRef || "n/d"),
+      txHash: String(txHash || "n/d"),
+      fromWallet: String(fromWallet || "n/d"),
+      toWallet: String(toWallet || "n/d"),
+      source: String(source || "n/d"),
+      actor: String(actor || "n/d"),
+      statusBefore: A.localizeStatus(statusBefore),
+      statusAfter: A.localizeStatus(statusAfter),
+      amountUsd:
+        amountUsd !== null && amountUsd !== undefined ? `${Number(amountUsd).toFixed(2)} USD` : "n/d",
+      amountCrypto: formatAmount(amountCrypto, currency),
+      currency: currency || "n/d",
+      confirmations:
+        confirmations !== null && confirmations !== undefined && Number.isFinite(Number(confirmations))
+          ? String(Number(confirmations))
+          : "n/d",
+      payload,
+    };
+  }
+
   function renderEvents() {
     if (!els.eventsList) return;
     if (!state.events.length) {
@@ -93,21 +328,87 @@
 
     els.eventsList.innerHTML = state.events
       .map((event) => {
-        const payloadPreview = event.payload ? JSON.stringify(event.payload) : "-";
-        const entity = event.entityShortId || event.entityId || "-";
+        const facts = parseEventFacts(event);
+        const payloadJson =
+          facts.payload && Object.keys(facts.payload).length > 0
+            ? JSON.stringify(facts.payload, null, 2)
+            : "Nessun payload";
         return `
-          <article class="log-item">
-            <div class="row">
-              <strong>${A.escapeHtml(event.action || "-")}</strong>
-              <small>${A.escapeHtml(A.formatDate(event.createdAt))}</small>
+          <details class="log-item log-expand">
+            <summary>
+                <div class="log-summary-main">
+                <div class="inline-actions">
+                  <span class="log-action-chip ${A.escapeHtml(facts.actionTone)}">${A.escapeHtml(
+          facts.action,
+        )}</span>
+                  <strong>${A.escapeHtml(facts.entityType)}</strong>
+                </div>
+                <small>#${A.escapeHtml(String(facts.id))}</small>
+              </div>
+              <div class="log-summary-meta">
+                <span>${A.escapeHtml(facts.entityType)}: <span class="mono">${A.escapeHtml(
+          facts.entityRef,
+        )}</span></span>
+                <span>Inv: <span class="mono">${A.escapeHtml(facts.invoiceRef)}</span></span>
+                <span>Tx: <span class="mono">${A.escapeHtml(facts.txRef)}</span></span>
+                <span>${A.escapeHtml(facts.when)}</span>
+              </div>
+            </summary>
+            <div class="log-grid">
+              <div class="log-kv"><small>Azione tecnica</small><strong>${A.escapeHtml(
+                facts.actionRaw,
+              )}</strong></div>
+              <div class="log-kv"><small>Entita</small><strong>${A.escapeHtml(
+                facts.entityType,
+              )}</strong></div>
+              <div class="log-kv"><small>Rif entita</small><strong class="mono">${A.escapeHtml(
+                facts.entityRef,
+              )}</strong></div>
+              <div class="log-kv"><small>Fattura</small><strong class="mono">${A.escapeHtml(
+                facts.invoiceRef,
+              )}</strong></div>
+              <div class="log-kv"><small>Transazione</small><strong class="mono">${A.escapeHtml(
+                facts.txRef,
+              )}</strong></div>
+              <div class="log-kv"><small>Hash tx</small><strong class="mono">${A.escapeHtml(
+                facts.txHash,
+              )}</strong></div>
+              <div class="log-kv"><small>Da</small><strong class="mono">${A.escapeHtml(
+                facts.fromWallet,
+              )}</strong></div>
+              <div class="log-kv"><small>A</small><strong class="mono">${A.escapeHtml(
+                facts.toWallet,
+              )}</strong></div>
+              <div class="log-kv"><small>Importo USD</small><strong>${A.escapeHtml(
+                facts.amountUsd,
+              )}</strong></div>
+              <div class="log-kv"><small>Importo crypto</small><strong>${A.escapeHtml(
+                facts.amountCrypto,
+              )}</strong></div>
+              <div class="log-kv"><small>Conferme</small><strong>${A.escapeHtml(
+                facts.confirmations,
+              )}</strong></div>
+              <div class="log-kv"><small>Valuta</small><strong>${A.escapeHtml(
+                facts.currency,
+              )}</strong></div>
+              <div class="log-kv"><small>Stato prima</small><strong>${A.escapeHtml(
+                facts.statusBefore,
+              )}</strong></div>
+              <div class="log-kv"><small>Stato dopo</small><strong>${A.escapeHtml(
+                facts.statusAfter,
+              )}</strong></div>
+              <div class="log-kv"><small>Fonte</small><strong>${A.escapeHtml(
+                facts.source,
+              )}</strong></div>
+              <div class="log-kv"><small>Operatore</small><strong>${A.escapeHtml(
+                facts.actor,
+              )}</strong></div>
             </div>
-            <div class="row">
-              <small>${A.escapeHtml(event.entityType || "-")} <span class="mono">${A.escapeHtml(entity)}</span></small>
+            <div class="log-raw">
+              <small>Payload grezzo</small>
+              <pre>${A.escapeHtml(payloadJson)}</pre>
             </div>
-            <div class="row">
-              <small>${A.escapeHtml(A.shortText(payloadPreview, 180))}</small>
-            </div>
-          </article>
+          </details>
         `;
       })
       .join("");
@@ -242,7 +543,7 @@
     const search = encodeURIComponent(String(els.txSearchInput?.value || "").trim());
     const status = encodeURIComponent(String(els.txStatusFilter?.value || "all"));
     const data = await A.request(`/api/admin/transactions?limit=200&search=${search}&status=${status}`);
-    state.transactions = data.transactions || [];
+    state.transactions = dedupeTransactions(data.transactions || []);
     renderTransactions();
   }
 
@@ -272,7 +573,7 @@
       await loadTransactionDetail(state.selectedTxRef, false);
     } else if (!hasFilters()) {
       const txFromDashboard = await A.request("/api/admin/dashboard?events_limit=8&tx_limit=20&risk_limit=1");
-      state.transactions = txFromDashboard.recentTransactions || state.transactions;
+      state.transactions = dedupeTransactions(txFromDashboard.recentTransactions || state.transactions);
       renderTransactions();
     }
   }
