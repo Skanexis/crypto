@@ -192,6 +192,11 @@
     return null;
   }
 
+  function pickFromArray(value) {
+    if (!Array.isArray(value)) return null;
+    return pickFirst(value);
+  }
+
   function formatAmount(value, currency) {
     if (value === null || value === undefined || value === "") return "n/d";
     const num = Number(value);
@@ -209,6 +214,9 @@
     const invoiceRef = pickFirst([
       event.invoiceShortId,
       payload.invoiceShortId,
+      payload.primaryInvoiceShortId,
+      pickFromArray(payload.invoiceShortIds),
+      pickFromArray(payload.invoiceRefs),
       payload.invoiceRef,
       payload.invoiceId,
       "n/d",
@@ -216,6 +224,9 @@
     const txRef = pickFirst([
       event.txShortId,
       payload.paymentShortId,
+      payload.primaryPaymentShortId,
+      pickFromArray(payload.paymentShortIds),
+      pickFromArray(payload.paymentRefs),
       payload.txShortId,
       payload.txRef,
       event.txId,
@@ -224,6 +235,8 @@
     const txHash = pickFirst([
       event.txHash,
       payload.txHash,
+      payload.primaryTxHash,
+      pickFromArray(payload.txHashes),
       payload.tx_hash,
       payload.hash,
       "n/d",

@@ -45,6 +45,9 @@ module.exports = {
     : 30,
   autoVerifyPayments: parseBool(process.env.AUTO_VERIFY_PAYMENTS, true),
   verifyIntervalSeconds: parseNumber(process.env.VERIFY_INTERVAL_SECONDS, 45),
+  verifierAlertsEnabled: parseBool(process.env.VERIFIER_ALERTS_ENABLED, true),
+  riskAlertsEnabled: parseBool(process.env.RISK_ALERTS_ENABLED, true),
+  riskAlertIntervalSeconds: parseNumber(process.env.RISK_ALERT_INTERVAL_SECONDS, 180),
   paymentAmountTolerancePct: parseNumber(
     process.env.PAYMENT_AMOUNT_TOLERANCE_PCT,
     1,

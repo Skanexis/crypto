@@ -46,6 +46,11 @@ Controllo rapido integrita payment-flow:
 npm run self-check
 ```
 
+Controllo completo end-to-end:
+```bash
+npm run full-check
+```
+
 Server:
 - Home admin UI: `http://localhost:3000/admin`
 - Pagina pagamento: `http://localhost:3000/pay/{token}`
@@ -73,6 +78,8 @@ curl -X POST http://localhost:3000/telegram/set-webhook \
 - `/new_invoice <importo_usd> [telegram_user_id] [valute]` (admin, rapido)
 - `/invoice_status <invoice_id>` (admin)
 - `/pending_invoices` (admin)
+- `/verify_now` (admin, trigger verifica on-chain)
+- `/risk_monitor` (admin, riepilogo monitor rischi)
 - `/delete_all_invoices` (admin, richiede conferma)
 
 Esempio:
@@ -82,9 +89,11 @@ Esempio:
 
 Nel menu admin Telegram:
 - `➕ Nuova fattura` avvia wizard guidato
-- `📄 Fatture aperte` mostra ultime fatture pendenti
-- `🔎 Stato fattura` chiede invoice id e mostra dettaglio
-- `🧹 Elimina tutte le fatture` richiede conferma testuale `ELIMINA TUTTO`
+- `📌 Stato fattura` richiede riferimento invoice e mostra stato
+- `🔎 Dettagli fattura` mostra fattura + transazioni + eventi
+- `🛰 Verifica pagamenti` lancia verifica on-chain manuale
+- `🚨 Monitor rischi` mostra criticita correnti
+- `🧹 Elimina tutte` richiede conferma testuale `ELIMINA TUTTO`
 
 ## API principali
 
@@ -158,6 +167,10 @@ Risposta: summary con numero di invoice/payment eliminate.
   - `PAYMENT_EARLY_MATCH_GRACE_SECONDS=0`
 - Retry automatico provider:
   - `PROVIDER_MAX_RETRIES`
+- Alert Telegram admin:
+  - `VERIFIER_ALERTS_ENABLED`
+  - `RISK_ALERTS_ENABLED`
+  - `RISK_ALERT_INTERVAL_SECONDS`
 - Importi invoice resi univoci (wallet condiviso):
   - `UNIQUE_AMOUNT_MAX_BUMPS`
 

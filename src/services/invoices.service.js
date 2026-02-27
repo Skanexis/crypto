@@ -1010,6 +1010,13 @@ function firstNonEmpty(values) {
   return null;
 }
 
+function firstArrayValue(values) {
+  if (!Array.isArray(values)) {
+    return null;
+  }
+  return firstNonEmpty(values);
+}
+
 function mapEventRowsWithReferences(rows) {
   const invoiceIds = new Set();
   const paymentIds = new Set();
@@ -1161,10 +1168,38 @@ function mapEventRowsWithReferences(rows) {
 
     return {
       ...event,
-      entityShortId: firstNonEmpty([payload.invoiceShortId, payload.paymentShortId]) || null,
-      invoiceShortId: firstNonEmpty([payload.invoiceShortId, payload.invoiceRef]) || null,
-      txShortId: firstNonEmpty([payload.paymentShortId, payload.txShortId]) || null,
-      txHash: firstNonEmpty([payload.txHash, payload.tx_hash]) || null,
+      entityShortId:
+        firstNonEmpty([
+          payload.invoiceShortId,
+          payload.primaryInvoiceShortId,
+          firstArrayValue(payload.invoiceShortIds),
+          payload.paymentShortId,
+          payload.primaryPaymentShortId,
+          firstArrayValue(payload.paymentShortIds),
+        ]) || null,
+      invoiceShortId:
+        firstNonEmpty([
+          payload.invoiceShortId,
+          payload.primaryInvoiceShortId,
+          firstArrayValue(payload.invoiceShortIds),
+          payload.invoiceRef,
+        ]) || null,
+      txShortId:
+        firstNonEmpty([
+          payload.paymentShortId,
+          payload.primaryPaymentShortId,
+          firstArrayValue(payload.paymentShortIds),
+          payload.txShortId,
+          firstArrayValue(payload.paymentRefs),
+        ]) || null,
+      txHash:
+        firstNonEmpty([
+          payload.txHash,
+          payload.primaryTxHash,
+          payload.tx_hash,
+          firstArrayValue(payload.txHashes),
+          firstArrayValue(payload.hashes),
+        ]) || null,
       currency: firstNonEmpty([payload.currency]) || null,
       network: firstNonEmpty([payload.network]) || null,
       walletAddress: firstNonEmpty([payload.walletAddress, payload.wallet_address]) || null,

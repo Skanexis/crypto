@@ -22,6 +22,8 @@ const EARLY_MATCH_GRACE_MS = Math.max(
   0,
   Number(config.paymentEarlyMatchGraceSeconds || 0),
 ) * 1000;
+const MAX_REFS_PER_RESULT = 40;
+const MAX_REFS_IN_LOG = 16;
 let verifierInProgress = false;
 const CURRENCY_DECIMALS = {
   USDT: 6,
@@ -85,6 +87,61 @@ function sortByInvoiceCreatedAtAsc(list) {
   );
 }
 
+function addRef(set, value) {
+  if (!set || set.size >= MAX_REFS_PER_RESULT) {
+    return;
+  }
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return;
+  }
+  set.add(normalized);
+}
+
+function mergeRefArrays(results, key) {
+  const values = [];
+  const seen = new Set();
+  for (const result of results || []) {
+    const items = Array.isArray(result?.[key]) ? result[key] : [];
+    for (const item of items) {
+      const normalized = String(item || "").trim();
+      if (!normalized || seen.has(normalized)) {
+        continue;
+      }
+      seen.add(normalized);
+      values.push(normalized);
+    }
+  }
+  return values;
+}
+
+function buildVerifierRefsPayload(results) {
+  const matchedInvoiceShortIds = mergeRefArrays(results, "invoiceRefs");
+  const matchedPaymentShortIds = mergeRefArrays(results, "paymentRefs");
+  const checkedInvoiceShortIds = mergeRefArrays(results, "checkedInvoiceRefs");
+  const checkedPaymentShortIds = mergeRefArrays(results, "checkedPaymentRefs");
+  const txHashes = mergeRefArrays(results, "txHashes");
+  const invoiceShortIds = matchedInvoiceShortIds.length
+    ? matchedInvoiceShortIds
+    : checkedInvoiceShortIds;
+  const paymentShortIds = matchedPaymentShortIds.length
+    ? matchedPaymentShortIds
+    : checkedPaymentShortIds;
+
+  return {
+    invoiceShortId: invoiceShortIds[0] || null,
+    paymentShortId: paymentShortIds[0] || null,
+    txHash: txHashes[0] || null,
+    invoiceShortIds: invoiceShortIds.slice(0, MAX_REFS_IN_LOG),
+    paymentShortIds: paymentShortIds.slice(0, MAX_REFS_IN_LOG),
+    txHashes: txHashes.slice(0, MAX_REFS_IN_LOG),
+    matchedInvoiceShortIds: matchedInvoiceShortIds.slice(0, MAX_REFS_IN_LOG),
+    matchedPaymentShortIds: matchedPaymentShortIds.slice(0, MAX_REFS_IN_LOG),
+    checkedInvoiceShortIds: checkedInvoiceShortIds.slice(0, MAX_REFS_IN_LOG),
+    checkedPaymentShortIds: checkedPaymentShortIds.slice(0, MAX_REFS_IN_LOG),
+  };
+}
+
 async function confirmInvoice(payment, txData, source) {
   const result = markInvoicePaid({
     invoiceId: payment.invoiceId,
@@ -112,6 +169,11 @@ async function verifyEthPayments() {
       checked: 0,
       paid: 0,
       errors: [],
+      invoiceRefs: [],
+      paymentRefs: [],
+      txHashes: [],
+      checkedInvoiceRefs: [],
+      checkedPaymentRefs: [],
       disabled: true,
       reason: "ETHERSCAN_API_KEY non configurata",
     };
@@ -124,11 +186,21 @@ async function verifyEthPayments() {
       checked: 0,
       paid: 0,
       errors: [],
+      invoiceRefs: [],
+      paymentRefs: [],
+      txHashes: [],
+      checkedInvoiceRefs: [],
+      checkedPaymentRefs: [],
     };
   }
 
   const walletMap = groupByWallet(pending);
   const usedHashes = new Set();
+  const invoiceRefs = new Set();
+  const paymentRefs = new Set();
+  const txHashes = new Set();
+  const checkedInvoiceRefs = new Set();
+  const checkedPaymentRefs = new Set();
   const errors = [];
   let checked = 0;
   let paid = 0;
@@ -145,6 +217,8 @@ async function verifyEthPayments() {
     const sortedPayments = sortByInvoiceCreatedAtAsc(walletPayments);
     for (const payment of sortedPayments) {
       checked += 1;
+      addRef(checkedInvoiceRefs, payment.invoiceShortId || payment.invoiceId);
+      addRef(checkedPaymentRefs, payment.paymentShortId || payment.paymentId);
       const match = transactions.find((tx) => {
         const hash = normalizeEthTxHash(tx.hash);
         if (!hash || usedHashes.has(hash) || isTxHashAlreadyUsed(hash)) {
@@ -177,7 +251,11 @@ async function verifyEthPayments() {
           "etherscan",
         );
         if (confirmResult.changed) {
-          usedHashes.add(normalizeEthTxHash(match.hash));
+          const normalizedHash = normalizeEthTxHash(match.hash);
+          usedHashes.add(normalizedHash);
+          addRef(invoiceRefs, payment.invoiceShortId || payment.invoiceId);
+          addRef(paymentRefs, payment.paymentShortId || payment.paymentId);
+          addRef(txHashes, normalizedHash);
           paid += 1;
         }
       } catch (error) {
@@ -193,6 +271,11 @@ async function verifyEthPayments() {
     checked,
     paid,
     errors,
+    invoiceRefs: [...invoiceRefs],
+    paymentRefs: [...paymentRefs],
+    txHashes: [...txHashes],
+    checkedInvoiceRefs: [...checkedInvoiceRefs],
+    checkedPaymentRefs: [...checkedPaymentRefs],
   };
 }
 
@@ -216,6 +299,11 @@ async function verifyTronUsdtPayments() {
       checked: 0,
       paid: 0,
       errors: [],
+      invoiceRefs: [],
+      paymentRefs: [],
+      txHashes: [],
+      checkedInvoiceRefs: [],
+      checkedPaymentRefs: [],
     };
   }
 
@@ -228,11 +316,21 @@ async function verifyTronUsdtPayments() {
       checked: 0,
       paid: 0,
       errors: [`TRON current block error: ${error.message}`],
+      invoiceRefs: [],
+      paymentRefs: [],
+      txHashes: [],
+      checkedInvoiceRefs: [],
+      checkedPaymentRefs: [],
     };
   }
 
   const walletMap = groupByWallet(pending);
   const usedHashes = new Set();
+  const invoiceRefs = new Set();
+  const paymentRefs = new Set();
+  const txHashes = new Set();
+  const checkedInvoiceRefs = new Set();
+  const checkedPaymentRefs = new Set();
   const errors = [];
   let checked = 0;
   let paid = 0;
@@ -249,6 +347,8 @@ async function verifyTronUsdtPayments() {
     const sortedPayments = sortByInvoiceCreatedAtAsc(walletPayments);
     for (const payment of sortedPayments) {
       checked += 1;
+      addRef(checkedInvoiceRefs, payment.invoiceShortId || payment.invoiceId);
+      addRef(checkedPaymentRefs, payment.paymentShortId || payment.paymentId);
       const candidate = transfers.find((tx) => {
         const hash = normalizeTronTxHash(tx.hash);
         if (!hash || usedHashes.has(hash) || isTxHashAlreadyUsed(hash)) {
@@ -288,7 +388,11 @@ async function verifyTronUsdtPayments() {
           "trongrid-usdt-trc20",
         );
         if (confirmResult.changed) {
-          usedHashes.add(normalizeTronTxHash(candidate.hash));
+          const normalizedHash = normalizeTronTxHash(candidate.hash);
+          usedHashes.add(normalizedHash);
+          addRef(invoiceRefs, payment.invoiceShortId || payment.invoiceId);
+          addRef(paymentRefs, payment.paymentShortId || payment.paymentId);
+          addRef(txHashes, normalizedHash);
           paid += 1;
         }
       } catch (error) {
@@ -304,6 +408,11 @@ async function verifyTronUsdtPayments() {
     checked,
     paid,
     errors,
+    invoiceRefs: [...invoiceRefs],
+    paymentRefs: [...paymentRefs],
+    txHashes: [...txHashes],
+    checkedInvoiceRefs: [...checkedInvoiceRefs],
+    checkedPaymentRefs: [...checkedPaymentRefs],
   };
 }
 
@@ -317,6 +426,11 @@ async function verifyBtcPayments() {
       checked: 0,
       paid: 0,
       errors: [],
+      invoiceRefs: [],
+      paymentRefs: [],
+      txHashes: [],
+      checkedInvoiceRefs: [],
+      checkedPaymentRefs: [],
     };
   }
 
@@ -329,11 +443,21 @@ async function verifyBtcPayments() {
       checked: 0,
       paid: 0,
       errors: [`BTC tip height error: ${error.message}`],
+      invoiceRefs: [],
+      paymentRefs: [],
+      txHashes: [],
+      checkedInvoiceRefs: [],
+      checkedPaymentRefs: [],
     };
   }
 
   const walletMap = groupByWallet(pending);
   const usedHashes = new Set();
+  const invoiceRefs = new Set();
+  const paymentRefs = new Set();
+  const txHashes = new Set();
+  const checkedInvoiceRefs = new Set();
+  const checkedPaymentRefs = new Set();
   const errors = [];
   let checked = 0;
   let paid = 0;
@@ -350,6 +474,8 @@ async function verifyBtcPayments() {
     const sortedPayments = sortByInvoiceCreatedAtAsc(walletPayments);
     for (const payment of sortedPayments) {
       checked += 1;
+      addRef(checkedInvoiceRefs, payment.invoiceShortId || payment.invoiceId);
+      addRef(checkedPaymentRefs, payment.paymentShortId || payment.paymentId);
       const candidate = transactions.find((tx) => {
         const hash = normalizeBtcTxHash(tx.hash);
         if (!hash || usedHashes.has(hash) || isTxHashAlreadyUsed(hash)) {
@@ -382,7 +508,11 @@ async function verifyBtcPayments() {
           "blockstream-btc",
         );
         if (confirmResult.changed) {
-          usedHashes.add(normalizeBtcTxHash(candidate.hash));
+          const normalizedHash = normalizeBtcTxHash(candidate.hash);
+          usedHashes.add(normalizedHash);
+          addRef(invoiceRefs, payment.invoiceShortId || payment.invoiceId);
+          addRef(paymentRefs, payment.paymentShortId || payment.paymentId);
+          addRef(txHashes, normalizedHash);
           paid += 1;
         }
       } catch (error) {
@@ -398,6 +528,11 @@ async function verifyBtcPayments() {
     checked,
     paid,
     errors,
+    invoiceRefs: [...invoiceRefs],
+    paymentRefs: [...paymentRefs],
+    txHashes: [...txHashes],
+    checkedInvoiceRefs: [...checkedInvoiceRefs],
+    checkedPaymentRefs: [...checkedPaymentRefs],
   };
 }
 
@@ -441,6 +576,8 @@ async function verifyPendingPayments() {
         summary.errors.push(...item.errors);
       }
     }
+    const refsPayload = buildVerifierRefsPayload(summary.results);
+    Object.assign(summary, refsPayload);
 
     logEvent("system", "payment_verifier", "run", {
       ranAt: summary.ranAt,
@@ -449,6 +586,16 @@ async function verifyPendingPayments() {
       errors: summary.errors.slice(0, 25),
       skipped: false,
       autoVerifyEnabled: summary.autoVerifyEnabled,
+      invoiceShortId: summary.invoiceShortId,
+      paymentShortId: summary.paymentShortId,
+      txHash: summary.txHash,
+      invoiceShortIds: summary.invoiceShortIds,
+      paymentShortIds: summary.paymentShortIds,
+      txHashes: summary.txHashes,
+      matchedInvoiceShortIds: summary.matchedInvoiceShortIds,
+      matchedPaymentShortIds: summary.matchedPaymentShortIds,
+      checkedInvoiceShortIds: summary.checkedInvoiceShortIds,
+      checkedPaymentShortIds: summary.checkedPaymentShortIds,
     });
 
     return summary;

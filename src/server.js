@@ -3,8 +3,12 @@ const http = require("http");
 const https = require("https");
 const app = require("./app");
 const config = require("./config");
-const { expireDueInvoices } = require("./services/invoices.service");
+const { expireDueInvoices, getRiskMonitor } = require("./services/invoices.service");
 const { runPaymentVerifierJob } = require("./services/payment-verifier.service");
+const {
+  notifyVerifierSummary,
+  notifyRiskMonitorSummary,
+} = require("./services/notifications.service");
 
 let server;
 
@@ -44,7 +48,26 @@ setInterval(async () => {
         console.log(`[jobs] verify errors: ${summary.errors.slice(0, 3).join(" | ")}`);
       }
     }
+    if (summary && config.verifierAlertsEnabled) {
+      await notifyVerifierSummary(summary, {
+        source: "job-auto",
+      });
+    }
   } catch (error) {
     console.error("[jobs] errore verifica pagamenti:", error.message);
   }
 }, Math.max(10, Number(config.verifyIntervalSeconds || 45)) * 1000);
+
+setInterval(async () => {
+  try {
+    if (!config.riskAlertsEnabled) {
+      return;
+    }
+    const monitor = getRiskMonitor({ limit: 100 });
+    await notifyRiskMonitorSummary(monitor, {
+      source: "job-risk",
+    });
+  } catch (error) {
+    console.error("[jobs] errore monitor rischi:", error.message);
+  }
+}, Math.max(30, Number(config.riskAlertIntervalSeconds || 180)) * 1000);

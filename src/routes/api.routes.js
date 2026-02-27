@@ -27,7 +27,13 @@ const {
   isValidWebhookSignature,
   processPaymentWebhook,
 } = require("../services/payments.service");
-const { notifyInvoicePaid } = require("../services/notifications.service");
+const {
+  notifyInvoicePaid,
+  notifyInvoiceCreated,
+  notifyInvoiceDeleted,
+  notifyBulkDelete,
+  notifyVerifierSummary,
+} = require("../services/notifications.service");
 const { verifyPendingPayments } = require("../services/payment-verifier.service");
 const { txExplorerUrl, addressExplorerUrl } = require("../services/explorer-links.service");
 
@@ -116,11 +122,16 @@ router.get("/rates", publicRateLimit, async (_req, res, next) => {
 
 router.post("/invoices", requireAdminApiKey, async (req, res, next) => {
   try {
+    const createdByAdminId = req.body.created_by_admin_id || "api_admin";
     const invoice = await createInvoice({
       amountUsd: req.body.amount_usd,
       allowedCurrencies: req.body.allowed_currencies,
       telegramUserId: req.body.telegram_user_id,
-      createdByAdminId: req.body.created_by_admin_id || "api_admin",
+      createdByAdminId,
+    });
+    await notifyInvoiceCreated(invoice, {
+      source: "api",
+      actor: String(createdByAdminId),
     });
     res.status(201).json({
       invoice,
@@ -142,7 +153,7 @@ router.get("/invoices/pending", requireAdminApiKey, (req, res, next) => {
   }
 });
 
-router.post("/invoices/delete-all", requireAdminApiKey, (req, res, next) => {
+router.post("/invoices/delete-all", requireAdminApiKey, async (req, res, next) => {
   try {
     const confirmation = String(req.body.confirm || "").trim().toUpperCase();
     if (confirmation !== "DELETE_ALL" && confirmation !== "ELIMINA_TUTTO") {
@@ -154,6 +165,10 @@ router.post("/invoices/delete-all", requireAdminApiKey, (req, res, next) => {
     }
 
     const summary = deleteAllInvoices();
+    await notifyBulkDelete(summary, {
+      source: "api",
+      actor: "api_admin",
+    });
     res.json({
       ok: true,
       summary,
@@ -242,7 +257,7 @@ router.get("/admin/invoices/:invoiceRef", requireAdminApiKey, async (req, res, n
   }
 });
 
-router.delete("/admin/invoices/:invoiceRef", requireAdminApiKey, (req, res, next) => {
+router.delete("/admin/invoices/:invoiceRef", requireAdminApiKey, async (req, res, next) => {
   try {
     const deletedBy =
       (req.body && req.body.deleted_by) ||
@@ -260,6 +275,11 @@ router.delete("/admin/invoices/:invoiceRef", requireAdminApiKey, (req, res, next
       });
       return;
     }
+
+    await notifyInvoiceDeleted(summary, {
+      source: "api",
+      actor: String(deletedBy),
+    });
 
     res.json({
       ok: true,
@@ -478,6 +498,9 @@ router.post("/payments/webhook", webhookRateLimit, async (req, res, next) => {
 router.post("/payments/verify-now", requireAdminApiKey, async (_req, res, next) => {
   try {
     const summary = await verifyPendingPayments();
+    await notifyVerifierSummary(summary, {
+      source: "manual-api",
+    });
     res.json({
       ok: true,
       summary,

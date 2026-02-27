@@ -7,6 +7,7 @@ const {
   getInvoiceAdminDetailsByRef,
   getTransactionByRef,
   getInvoiceStatusByRef,
+  getRiskMonitor,
   listInvoices,
   listRecentTransactions,
   listOpenInvoicesForTelegramUser,
@@ -20,8 +21,11 @@ const adminSessions = new Map();
 const ADMIN_BUTTONS = {
   CREATE: "➕ Nuova fattura",
   DASHBOARD: "📊 Panoramica",
+  STATUS: "📌 Stato fattura",
   LIST: "🧾 Lista fatture",
   DETAIL: "🔎 Dettagli fattura",
+  VERIFY_NOW: "🛰 Verifica pagamenti",
+  RISKS: "🚨 Monitor rischi",
   TX_FEED: "💳 Flusso transazioni",
   TX_DETAIL: "🧷 Dettaglio tx",
   DELETE_ONE: "🗑 Elimina fattura",
@@ -41,15 +45,33 @@ const ADMIN_MODES = {
   DELETE_CONFIRM: "delete_confirm",
 };
 
+const ADMIN_INTENTS = {
+  CREATE: "create",
+  DASHBOARD: "dashboard",
+  STATUS: "status",
+  LIST: "list",
+  DETAIL: "detail",
+  VERIFY_NOW: "verify_now",
+  RISKS: "risks",
+  TX_FEED: "tx_feed",
+  TX_DETAIL: "tx_detail",
+  DELETE_ONE: "delete_one",
+  DELETE_ALL: "delete_all",
+  HELP: "help",
+  CANCEL: "cancel",
+};
+
 function adminKeyboard() {
   return {
     reply_markup: {
       keyboard: [
         [{ text: ADMIN_BUTTONS.CREATE }, { text: ADMIN_BUTTONS.DASHBOARD }],
-        [{ text: ADMIN_BUTTONS.LIST }, { text: ADMIN_BUTTONS.DETAIL }],
-        [{ text: ADMIN_BUTTONS.TX_FEED }, { text: ADMIN_BUTTONS.TX_DETAIL }],
-        [{ text: ADMIN_BUTTONS.DELETE_ONE }, { text: ADMIN_BUTTONS.DELETE_ALL }],
-        [{ text: ADMIN_BUTTONS.HELP }, { text: ADMIN_BUTTONS.CANCEL }],
+        [{ text: ADMIN_BUTTONS.STATUS }, { text: ADMIN_BUTTONS.DETAIL }],
+        [{ text: ADMIN_BUTTONS.LIST }, { text: ADMIN_BUTTONS.TX_FEED }],
+        [{ text: ADMIN_BUTTONS.TX_DETAIL }, { text: ADMIN_BUTTONS.VERIFY_NOW }],
+        [{ text: ADMIN_BUTTONS.RISKS }, { text: ADMIN_BUTTONS.DELETE_ONE }],
+        [{ text: ADMIN_BUTTONS.DELETE_ALL }, { text: ADMIN_BUTTONS.HELP }],
+        [{ text: ADMIN_BUTTONS.CANCEL }],
       ],
       resize_keyboard: true,
       is_persistent: true,
@@ -97,44 +119,131 @@ function clearAdminSession(chatId) {
   adminSessions.delete(String(chatId));
 }
 
+function normalizeControlText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}/_\s]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const ADMIN_INTENT_ALIASES = {
+  [ADMIN_INTENTS.CREATE]: [
+    ADMIN_BUTTONS.CREATE,
+    "nuova fattura",
+    "/new_invoice",
+    "/nuova_fattura",
+  ],
+  [ADMIN_INTENTS.DASHBOARD]: [
+    ADMIN_BUTTONS.DASHBOARD,
+    "panoramica",
+    "dashboard",
+    "/admin",
+    "/admin_dashboard",
+  ],
+  [ADMIN_INTENTS.STATUS]: [
+    ADMIN_BUTTONS.STATUS,
+    "stato fattura",
+    "/invoice_status",
+    "/stato_fattura",
+  ],
+  [ADMIN_INTENTS.LIST]: [
+    ADMIN_BUTTONS.LIST,
+    "fatture in attesa",
+    "/pending_invoices",
+    "/fatture_in_attesa",
+  ],
+  [ADMIN_INTENTS.DETAIL]: [
+    ADMIN_BUTTONS.DETAIL,
+    "dettagli fattura",
+    "dettaglio fattura",
+    "/invoice_detail",
+    "/dettaglio_fattura",
+    "/invoice_logs",
+  ],
+  [ADMIN_INTENTS.VERIFY_NOW]: [
+    ADMIN_BUTTONS.VERIFY_NOW,
+    "verifica pagamenti",
+    "verifica on chain",
+    "/verify_now",
+    "/verifica_pagamenti",
+  ],
+  [ADMIN_INTENTS.RISKS]: [
+    ADMIN_BUTTONS.RISKS,
+    "monitor rischi",
+    "rischi",
+    "/risk_monitor",
+    "/monitor_rischi",
+  ],
+  [ADMIN_INTENTS.TX_FEED]: [
+    ADMIN_BUTTONS.TX_FEED,
+    "flusso transazioni",
+    "/tx_feed",
+    "/flusso_tx",
+  ],
+  [ADMIN_INTENTS.TX_DETAIL]: [
+    ADMIN_BUTTONS.TX_DETAIL,
+    "dettaglio tx",
+    "stato tx",
+    "/tx_status",
+    "/stato_tx",
+    "/tx_detail",
+    "/dettaglio_tx",
+  ],
+  [ADMIN_INTENTS.DELETE_ONE]: [
+    ADMIN_BUTTONS.DELETE_ONE,
+    "elimina fattura",
+    "/invoice_delete",
+    "/elimina_fattura",
+  ],
+  [ADMIN_INTENTS.DELETE_ALL]: [
+    ADMIN_BUTTONS.DELETE_ALL,
+    "elimina tutte",
+    "elimina tutte fatture",
+    "/delete_all_invoices",
+    "/elimina_tutte_fatture",
+  ],
+  [ADMIN_INTENTS.HELP]: [ADMIN_BUTTONS.HELP, "aiuto", "/help", "/aiuto"],
+  [ADMIN_INTENTS.CANCEL]: [ADMIN_BUTTONS.CANCEL, "annulla", "/cancel"],
+};
+
+const ADMIN_INTENT_LOOKUP = new Map();
+for (const [intent, aliases] of Object.entries(ADMIN_INTENT_ALIASES)) {
+  for (const alias of aliases) {
+    const key = normalizeControlText(alias);
+    if (key) {
+      ADMIN_INTENT_LOOKUP.set(key, intent);
+    }
+  }
+}
+
+function detectAdminIntent(textRaw) {
+  const normalized = normalizeControlText(textRaw);
+  if (!normalized) {
+    return null;
+  }
+
+  if (ADMIN_INTENT_LOOKUP.has(normalized)) {
+    return ADMIN_INTENT_LOOKUP.get(normalized);
+  }
+
+  const firstToken = normalized.split(" ")[0] || normalized;
+  if (ADMIN_INTENT_LOOKUP.has(firstToken)) {
+    return ADMIN_INTENT_LOOKUP.get(firstToken);
+  }
+
+  const tokenWithoutBot = firstToken.replace(/@[\w_]+$/i, "");
+  if (ADMIN_INTENT_LOOKUP.has(tokenWithoutBot)) {
+    return ADMIN_INTENT_LOOKUP.get(tokenWithoutBot);
+  }
+
+  return null;
+}
+
 function isAdminControlText(textRaw) {
-  const text = String(textRaw || "").trim();
-  return (
-    text === ADMIN_BUTTONS.CREATE ||
-    text === ADMIN_BUTTONS.DASHBOARD ||
-    text === ADMIN_BUTTONS.LIST ||
-    text === ADMIN_BUTTONS.DETAIL ||
-    text === ADMIN_BUTTONS.TX_FEED ||
-    text === ADMIN_BUTTONS.TX_DETAIL ||
-    text === ADMIN_BUTTONS.DELETE_ONE ||
-    text === ADMIN_BUTTONS.DELETE_ALL ||
-    text === ADMIN_BUTTONS.HELP ||
-    text === ADMIN_BUTTONS.CANCEL ||
-    text.startsWith("/admin") ||
-    text.startsWith("/admin_dashboard") ||
-    text.startsWith("/new_invoice") ||
-    text.startsWith("/nuova_fattura") ||
-    text.startsWith("/pending_invoices") ||
-    text.startsWith("/fatture_in_attesa") ||
-    text.startsWith("/invoice_status") ||
-    text.startsWith("/stato_fattura") ||
-    text.startsWith("/invoice_detail") ||
-    text.startsWith("/dettaglio_fattura") ||
-    text.startsWith("/invoice_logs") ||
-    text.startsWith("/tx_feed") ||
-    text.startsWith("/flusso_tx") ||
-    text.startsWith("/tx_status") ||
-    text.startsWith("/stato_tx") ||
-    text.startsWith("/tx_detail") ||
-    text.startsWith("/dettaglio_tx") ||
-    text.startsWith("/invoice_delete") ||
-    text.startsWith("/elimina_fattura") ||
-    text.startsWith("/delete_all_invoices") ||
-    text.startsWith("/elimina_tutte_fatture") ||
-    text.startsWith("/help") ||
-    text.startsWith("/aiuto") ||
-    text.startsWith("/cancel")
-  );
+  return Boolean(detectAdminIntent(textRaw));
 }
 
 async function callTelegramApi(method, payload) {
@@ -438,6 +547,8 @@ async function handleHelp(message) {
     "/dettaglio_fattura <rif_fattura>\n" +
     "/flusso_tx\n" +
     "/stato_tx <rif_tx|tx_hash>\n" +
+    "/verify_now\n" +
+    "/risk_monitor\n" +
     "/elimina_fattura <rif_fattura>\n" +
     "/elimina_tutte_fatture\n" +
     "/cancel";
@@ -587,6 +698,65 @@ async function showRecentTransactions(message) {
   await sendMessage(message.chat.id, text, adminKeyboard());
 }
 
+async function runVerifyNow(message) {
+  const { verifyPendingPayments } = require("./payment-verifier.service");
+  const summary = await verifyPendingPayments();
+  const resultLines = (summary.results || []).map((item) => {
+    const disabled = item.disabled ? " (disabled)" : "";
+    return `${item.currency}${disabled}: checked ${item.checked}, paid ${item.paid}, errors ${item.errors.length}`;
+  });
+
+  const text =
+    `Verifica pagamenti completata\n` +
+    `Controllati: ${summary.checked}\n` +
+    `Pagati: ${summary.paid}\n` +
+    `Errori: ${summary.errors.length}\n\n` +
+    `Provider:\n${resultLines.join("\n")}` +
+    (summary.errors.length
+      ? `\n\nPrime anomalie:\n${summary.errors.slice(0, 5).join("\n")}`
+      : "");
+
+  await sendMessage(message.chat.id, text, adminKeyboard());
+}
+
+function localizeRiskSeverity(severity) {
+  const key = String(severity || "").toLowerCase();
+  if (key === "critical") return "critico";
+  if (key === "high") return "alto";
+  if (key === "medium") return "medio";
+  return key || "n/d";
+}
+
+async function showRiskMonitor(message) {
+  const monitor = getRiskMonitor({ limit: 12 });
+  const summary = monitor.summary || {
+    total: 0,
+    critical: 0,
+    high: 0,
+    medium: 0,
+    displayed: 0,
+  };
+
+  const alertsText =
+    (monitor.alerts || [])
+      .slice(0, 6)
+      .map((alert) => {
+        const invoiceRef = alert.invoiceRef || "-";
+        const txRef = alert.txRef || "-";
+        return `${localizeRiskSeverity(alert.severity)} | ${alert.code} | inv ${invoiceRef} | tx ${txRef}`;
+      })
+      .join("\n") || "Nessun alert attivo";
+
+  const text =
+    `Monitor rischi\n` +
+    `Totale: ${summary.total} (critici ${summary.critical}, alti ${summary.high}, medi ${summary.medium})\n` +
+    `Visualizzati: ${summary.displayed}\n` +
+    `Aggiornato: ${new Date(monitor.generatedAt).toLocaleString("it-IT")}\n\n` +
+    `Top alert:\n${alertsText}`;
+
+  await sendMessage(message.chat.id, text, adminKeyboard());
+}
+
 async function requestTxDetails(message) {
   setAdminSession(message.chat.id, ADMIN_MODES.TX_REF);
   await sendMessage(
@@ -672,13 +842,14 @@ async function handleAdminSessionInput(message, text) {
     return false;
   }
 
-  if (text === ADMIN_BUTTONS.CANCEL || text.startsWith("/cancel")) {
+  const intent = detectAdminIntent(text);
+  if (intent === ADMIN_INTENTS.CANCEL) {
     clearAdminSession(message.chat.id);
     await sendAdminDashboard(message.chat.id, "Azione annullata.");
     return true;
   }
 
-  if (isAdminControlText(text)) {
+  if (intent) {
     clearAdminSession(message.chat.id);
     return false;
   }
@@ -774,130 +945,100 @@ async function handleAdminMessage(message, text) {
     return true;
   }
 
-  if (text === ADMIN_BUTTONS.CANCEL || text.startsWith("/cancel")) {
-    clearAdminSession(message.chat.id);
-    await sendAdminDashboard(message.chat.id, "Azione annullata.");
-    return true;
-  }
-
   if (text.startsWith("/start")) {
     clearAdminSession(message.chat.id);
     await handleStart(message);
     return true;
   }
 
-  if (
-    text.startsWith("/admin") ||
-    text.startsWith("/admin_dashboard") ||
-    text === ADMIN_BUTTONS.DASHBOARD
-  ) {
-    clearAdminSession(message.chat.id);
+  const intent = detectAdminIntent(text);
+  if (!intent) {
+    return false;
+  }
+
+  clearAdminSession(message.chat.id);
+
+  if (intent === ADMIN_INTENTS.CANCEL) {
+    await sendAdminDashboard(message.chat.id, "Azione annullata.");
+    return true;
+  }
+
+  if (intent === ADMIN_INTENTS.DASHBOARD) {
     await sendAdminDashboard(message.chat.id);
     return true;
   }
 
-  if (text === ADMIN_BUTTONS.HELP || text.startsWith("/help") || text.startsWith("/aiuto")) {
-    clearAdminSession(message.chat.id);
+  if (intent === ADMIN_INTENTS.HELP) {
     await handleHelp(message);
     return true;
   }
 
-  if (
-    text === ADMIN_BUTTONS.CREATE ||
-    text.startsWith("/new_invoice") ||
-    text.startsWith("/nuova_fattura")
-  ) {
-    clearAdminSession(message.chat.id);
+  if (intent === ADMIN_INTENTS.CREATE) {
     await handleNewInvoiceCommand(message);
     return true;
   }
 
-  if (
-    text === ADMIN_BUTTONS.LIST ||
-    text.startsWith("/pending_invoices") ||
-    text.startsWith("/fatture_in_attesa")
-  ) {
-    clearAdminSession(message.chat.id);
+  if (intent === ADMIN_INTENTS.LIST) {
     await showPendingInvoices(message);
     return true;
   }
 
-  if (text.startsWith("/invoice_status") || text.startsWith("/stato_fattura")) {
-    clearAdminSession(message.chat.id);
-    const parts = text.split(/\s+/);
-    if (parts.length < 2) {
+  const parts = text.trim().split(/\s+/);
+  const arg = parts.length >= 2 ? parts.slice(1).join(" ") : "";
+
+  if (intent === ADMIN_INTENTS.STATUS) {
+    if (!arg) {
       await requestInvoiceStatus(message);
       return true;
     }
-    await processInvoiceStatusByRef(message, parts[1]);
+    await processInvoiceStatusByRef(message, arg);
     return true;
   }
 
-  if (
-    text === ADMIN_BUTTONS.DETAIL ||
-    text.startsWith("/invoice_detail") ||
-    text.startsWith("/dettaglio_fattura") ||
-    text.startsWith("/invoice_logs")
-  ) {
-    clearAdminSession(message.chat.id);
-    const parts = text.split(/\s+/);
-    if (parts.length < 2) {
+  if (intent === ADMIN_INTENTS.DETAIL) {
+    if (!arg) {
       await requestInvoiceDetails(message);
       return true;
     }
-    await processInvoiceDetailsByRef(message, parts[1]);
+    await processInvoiceDetailsByRef(message, arg);
     return true;
   }
 
-  if (
-    text === ADMIN_BUTTONS.TX_FEED ||
-    text.startsWith("/tx_feed") ||
-    text.startsWith("/flusso_tx")
-  ) {
-    clearAdminSession(message.chat.id);
+  if (intent === ADMIN_INTENTS.TX_FEED) {
     await showRecentTransactions(message);
     return true;
   }
 
-  if (
-    text === ADMIN_BUTTONS.TX_DETAIL ||
-    text.startsWith("/tx_status") ||
-    text.startsWith("/stato_tx") ||
-    text.startsWith("/tx_detail") ||
-    text.startsWith("/dettaglio_tx")
-  ) {
-    clearAdminSession(message.chat.id);
-    const parts = text.split(/\s+/);
-    if (parts.length < 2) {
+  if (intent === ADMIN_INTENTS.TX_DETAIL) {
+    if (!arg) {
       await requestTxDetails(message);
       return true;
     }
-    await processTxDetailsByRef(message, parts[1]);
+    await processTxDetailsByRef(message, arg);
     return true;
   }
 
-  if (
-    text === ADMIN_BUTTONS.DELETE_ONE ||
-    text.startsWith("/invoice_delete") ||
-    text.startsWith("/elimina_fattura")
-  ) {
-    clearAdminSession(message.chat.id);
-    const parts = text.split(/\s+/);
-    if (parts.length < 2) {
+  if (intent === ADMIN_INTENTS.DELETE_ONE) {
+    if (!arg) {
       await requestDeleteOne(message);
       return true;
     }
-    await processDeleteOneByRef(message, parts[1]);
+    await processDeleteOneByRef(message, arg);
     return true;
   }
 
-  if (
-    text === ADMIN_BUTTONS.DELETE_ALL ||
-    text.startsWith("/delete_all_invoices") ||
-    text.startsWith("/elimina_tutte_fatture")
-  ) {
-    clearAdminSession(message.chat.id);
+  if (intent === ADMIN_INTENTS.DELETE_ALL) {
     await requestDeleteAll(message);
+    return true;
+  }
+
+  if (intent === ADMIN_INTENTS.VERIFY_NOW) {
+    await runVerifyNow(message);
+    return true;
+  }
+
+  if (intent === ADMIN_INTENTS.RISKS) {
+    await showRiskMonitor(message);
     return true;
   }
 
