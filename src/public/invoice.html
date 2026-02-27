@@ -3,81 +3,73 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Pagamento Fattura</title>
+    <title>Checkout Fattura</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body>
-    <main class="client-shell">
-      <header class="hero">
-        <div class="hero-top">
-          <div>
-            <span class="eyebrow">Checkout Sicuro</span>
-            <h1>Pagamento fattura</h1>
-            <p>
-              Invia l'importo esatto utilizzando rete e valuta indicate. Lo stato si aggiorna automaticamente dopo la
-              conferma blockchain.
-            </p>
-            <div class="hero-chips">
-              <span class="chip">Rif: <strong id="invoiceRef">-</strong></span>
-              <span class="chip">Importo: <strong id="usdAmount">-</strong></span>
-              <span class="chip">Scadenza: <strong id="expiresAt">-</strong></span>
-              <span class="chip">Tempo: <strong id="countdown">-</strong></span>
-            </div>
+  <body class="invoice-page">
+    <div class="page-aurora" aria-hidden="true"></div>
+
+    <main class="layout-invoice layout-invoice-minimal">
+      <header class="checkout-hero checkout-hero-minimal panel">
+        <div class="checkout-copy">
+          <span class="eyebrow">Checkout Sicuro</span>
+          <h1>Completa il pagamento</h1>
+          <p>Invia l'importo esatto con la rete corretta. Lo stato si aggiorna automaticamente.</p>
+          <div class="hero-chips">
+            <span class="chip">Importo: <strong id="usdAmount">-</strong></span>
+            <span class="chip">Rif: <strong id="invoiceRef">-</strong></span>
+            <span class="chip">Tempo residuo: <strong id="countdown">-</strong></span>
           </div>
-          <div class="hero-cta">
-            <span id="invoiceBadge" class="badge pending">in attesa</span>
-            <small>Controllo on-chain attivo</small>
-          </div>
+          <p class="checkout-subline">Scadenza: <strong id="expiresAt">-</strong></p>
+        </div>
+
+        <div class="checkout-status">
+          <span id="invoiceBadge" class="badge pending">in attesa</span>
+          <small id="statusHintBadge" class="muted-status">in attesa</small>
+          <small>Verifica blockchain attiva</small>
         </div>
       </header>
 
-      <section class="client-frame">
-        <div class="client-head">
+      <section class="panel payment-panel">
+        <div class="panel-head">
           <div>
-            <h3>Dettagli transazione</h3>
-            <p>Utilizza i pulsanti di copia per evitare errori.</p>
-          </div>
-          <span id="statusHintBadge" class="badge pending">in attesa</span>
-        </div>
-
-        <div class="client-body">
-          <div id="statusHint" class="notice">Invia il pagamento e attendi la conferma di rete.</div>
-
-          <div class="client-grid">
-            <section>
-              <div id="walletCards" class="stack"></div>
-            </section>
-
-            <aside>
-              <div class="stack">
-                <div class="copy-field">
-                  <small>UUID fattura</small>
-                  <strong id="invoiceId" class="mono">-</strong>
-                </div>
-                <div class="copy-field">
-                  <small>Token fattura</small>
-                  <strong id="invoiceToken" class="mono">-</strong>
-                </div>
-                <div class="copy-field">
-                  <small>Ultimo aggiornamento</small>
-                  <strong id="updatedAt">-</strong>
-                </div>
-                <div class="copy-field">
-                  <small>Valute abilitate</small>
-                  <strong id="currenciesText">-</strong>
-                </div>
-                <div id="finalMessage" class="notice hidden"></div>
-              </div>
-            </aside>
+            <h2>Metodi di pagamento</h2>
+            <p>Copiando importo e indirizzo eviti errori.</p>
           </div>
         </div>
+
+        <div id="statusHint" class="notice">Invia il pagamento e attendi la conferma di rete.</div>
+        <div id="walletCards" class="stack"></div>
+        <div id="finalMessage" class="notice hidden"></div>
       </section>
+
+      <details class="panel tech-collapse">
+        <summary>Dati tecnici (facoltativo)</summary>
+        <div class="tech-grid">
+          <div class="copy-field">
+            <small>UUID fattura</small>
+            <strong id="invoiceId" class="mono">-</strong>
+          </div>
+          <div class="copy-field">
+            <small>Token fattura</small>
+            <strong id="invoiceToken" class="mono">-</strong>
+          </div>
+          <div class="copy-field">
+            <small>Ultimo aggiornamento</small>
+            <strong id="updatedAt">-</strong>
+          </div>
+          <div class="copy-field">
+            <small>Valute abilitate</small>
+            <strong id="currenciesText">-</strong>
+          </div>
+        </div>
+      </details>
     </main>
 
     <div id="toast" class="toast hidden"></div>

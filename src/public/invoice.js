@@ -144,14 +144,13 @@ function renderWalletCards(payments, invoiceStatus) {
       const safeTxHash = escapeHtml(payment.txHash || "");
       const safePaymentId = escapeHtml(payment.id || "");
       const safeQrDataUrl = escapeHtml(payment.qrDataUrl || "");
-      const safeQrText = escapeHtml(payment.qrText || "");
       const safeExplorerTxUrl = escapeHtml(payment.explorerTxUrl || "");
       const txInfo = payment.txHash
         ? `<div class="copy-field"><small>Hash tx</small><strong class="mono">${safeTxHash}</strong></div>`
         : "";
-      const explorerBtn = payment.explorerTxUrl
+      const explorerBtn = payment.explorerTxUrl && payment.txHash
         ? `<button class="btn btn-ghost" data-open-url="${safeExplorerTxUrl}">Apri explorer tx</button>`
-        : `<button class="btn btn-ghost" disabled>Apri explorer tx</button>`;
+        : "";
       return `
         <article class="wallet-card">
           <div class="wallet-head">
@@ -181,9 +180,8 @@ function renderWalletCards(payments, invoiceStatus) {
 
           <div class="client-actions">
             <button class="btn btn-primary" data-copy-amount="${safeAmountValue}">Copia importo</button>
-            <button class="btn btn-secondary" data-copy-address="${safeWalletAddress}">Copia wallet</button>
+            <button class="btn btn-secondary" data-copy-address="${safeWalletAddress}">Copia indirizzo</button>
             <button class="btn btn-ghost" data-open-wallet="${safePaymentId}">Apri wallet</button>
-            <button class="btn btn-ghost" data-copy-uri="${safeQrText}">Copia URI</button>
             ${explorerBtn}
           </div>
         </article>
@@ -296,12 +294,6 @@ function attachWalletActions() {
     const copyAddressBtn = event.target.closest("button[data-copy-address]");
     if (copyAddressBtn && !copyAddressBtn.disabled) {
       await copyText(copyAddressBtn.dataset.copyAddress, "Indirizzo copiato");
-      return;
-    }
-
-    const copyUriBtn = event.target.closest("button[data-copy-uri]");
-    if (copyUriBtn && !copyUriBtn.disabled) {
-      await copyText(copyUriBtn.dataset.copyUri, "URI copiato");
       return;
     }
 
