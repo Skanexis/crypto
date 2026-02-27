@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Dashboard Pagamenti</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/admin-glass.css?v=20260227-dashboard2" />
+  </head>
+  <body class="admin-glass-body">
+    <div class="glow glow-a" aria-hidden="true"></div>
+    <div class="glow glow-b" aria-hidden="true"></div>
+    <div class="glow glow-c" aria-hidden="true"></div>
+
+    <div class="admin-shell">
+      <aside class="card-glass nav-glass">
+        <div class="brand">
+          <span class="eyebrow">Sistema Pagamenti</span>
+          <h1>Console Operativa</h1>
+          <p>Controllo operativo completo per fatture crypto, transazioni e monitoraggio rischi.</p>
+        </div>
+
+        <nav class="nav-links">
+          <a class="nav-link" href="/admin/dashboard" data-nav="dashboard">Panoramica</a>
+          <a class="nav-link" href="/admin/invoices" data-nav="invoices">Fatture</a>
+          <a class="nav-link" href="/admin/transactions" data-nav="transactions">Transazioni</a>
+          <a class="nav-link" href="/admin/risks" data-nav="risks">Rischi</a>
+        </nav>
+
+        <div class="nav-foot">
+          <small>Sessione</small>
+          <button id="autoRefreshBtn" class="btn btn-ghost" type="button">Aggiornamento automatico: OFF</button>
+          <div class="chip-row">
+            <span class="chip">USDT TRC20</span>
+            <span class="chip">BTC</span>
+            <span class="chip">ETH</span>
+            <span class="chip">ID INV/TX</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="card-glass top-glass">
+          <div class="title-stack">
+            <span class="eyebrow">Centro di controllo</span>
+            <h2>Dashboard operativa</h2>
+            <p>Crea fatture in pochi secondi, monitora pagamenti in tempo reale e verifica subito le anomalie.</p>
+          </div>
+
+          <div class="auth-stack">
+            <div class="field">
+              <label for="apiKey">Chiave API amministratore</label>
+              <input id="apiKey" class="input" type="password" autocomplete="off" placeholder="x-api-key" />
+            </div>
+            <div class="actions">
+              <button id="connectBtn" class="btn btn-primary" type="button">Connetti</button>
+              <button id="refreshBtn" class="btn btn-secondary" type="button">Aggiorna</button>
+            </div>
+            <div id="headerNotice" class="notice hidden"></div>
+          </div>
+        </header>
+
+        <section class="metric-grid">
+          <article class="metric-card">
+            <small>Fatture totali</small>
+            <strong id="mInvoicesTotal">-</strong>
+          </article>
+          <article class="metric-card warn">
+            <small>Fatture in attesa</small>
+            <strong id="mInvoicesPending">-</strong>
+          </article>
+          <article class="metric-card ok">
+            <small>Volume pagato (USD)</small>
+            <strong id="mVolumePaid">-</strong>
+          </article>
+          <article class="metric-card">
+            <small>Transazioni confermate</small>
+            <strong id="mTxConfirmed">-</strong>
+          </article>
+        </section>
+
+        <section class="page-grid grid-2">
+          <article class="panel-glass">
+            <div class="panel-head">
+              <div>
+                <h3>Nuova fattura</h3>
+                <p>Importo sempre in USD, conversione automatica su USDT/BTC/ETH.</p>
+              </div>
+              <span class="pill">Creazione</span>
+            </div>
+
+            <div class="field">
+              <label for="amountUsd">Importo USD</label>
+              <input id="amountUsd" class="input" type="text" inputmode="decimal" value="100.00" />
+            </div>
+
+            <div class="field">
+              <label for="telegramUserId">ID Telegram cliente (opzionale)</label>
+              <input id="telegramUserId" class="input" type="text" placeholder="es. 123456789" />
+            </div>
+
+            <div class="field">
+              <label>Valute abilitate</label>
+              <div class="currency-grid">
+                <label class="currency-item"><input type="checkbox" value="USDT" checked />USDT</label>
+                <label class="currency-item"><input type="checkbox" value="BTC" checked />BTC</label>
+                <label class="currency-item"><input type="checkbox" value="ETH" checked />ETH</label>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="createBtn" class="btn btn-primary" type="button">Crea fattura</button>
+              <button id="verifyBtn" class="btn btn-secondary" type="button">Verifica on-chain ora</button>
+              <button id="deleteAllBtn" class="btn btn-danger" type="button">Elimina tutte</button>
+            </div>
+
+            <div id="createNotice" class="notice hidden"></div>
+          </article>
+
+          <article class="panel-glass">
+            <div class="panel-head">
+              <div>
+                <h3>Monitor rischi rapido</h3>
+                <p>Vista immediata delle criticita con severita e trend corrente.</p>
+              </div>
+              <span id="riskGeneratedAt" class="pill">-</span>
+            </div>
+
+            <div id="riskMiniSummary" class="risk-grid"></div>
+            <div id="riskTopAlerts" class="tx-list"></div>
+          </article>
+        </section>
+
+        <section class="page-grid grid-2">
+          <article class="panel-glass">
+            <div class="panel-head">
+              <div>
+                <h3>Fatture in attesa</h3>
+                <p>Azioni rapide su link cliente e riferimenti fattura.</p>
+              </div>
+              <a class="pill" href="/admin/invoices">Apri registro</a>
+            </div>
+            <div id="pendingInvoicesList" class="tx-list"></div>
+          </article>
+
+          <article class="panel-glass">
+            <div class="panel-head">
+              <div>
+                <h3>Ultime transazioni</h3>
+                <p>Flusso live con hash, stato e collegamento explorer.</p>
+              </div>
+              <a class="pill" href="/admin/transactions">Apri feed</a>
+            </div>
+            <div id="recentTransactionsList" class="tx-list"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/admin-common.js?v=20260227-dashboard2"></script>
+    <script src="/static/admin-dashboard.js?v=20260227-dashboard2"></script>
+  </body>
+</html>

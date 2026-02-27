@@ -912,7 +912,10 @@ function markInvoicePaid({
     tx();
   } catch (error) {
     const message = String(error.message || "");
-    if (message.includes("idx_payments_tx_hash_unique")) {
+    if (
+      message.includes("idx_payments_tx_hash_unique") ||
+      message.includes("UNIQUE constraint failed: payments.tx_hash")
+    ) {
       return {
         invoice: getInvoiceWithPaymentsById(invoiceId),
         changed: false,

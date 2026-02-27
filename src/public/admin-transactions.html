@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Feed Transazioni</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/admin-glass.css?v=20260227-transactions2" />
+  </head>
+  <body class="admin-glass-body">
+    <div class="glow glow-a" aria-hidden="true"></div>
+    <div class="glow glow-b" aria-hidden="true"></div>
+    <div class="glow glow-c" aria-hidden="true"></div>
+
+    <div class="admin-shell">
+      <aside class="card-glass nav-glass">
+        <div class="brand">
+          <span class="eyebrow">Sistema Pagamenti</span>
+          <h1>Console Operativa</h1>
+          <p>Analisi live delle transazioni, hash on-chain e correlazione fatture.</p>
+        </div>
+
+        <nav class="nav-links">
+          <a class="nav-link" href="/admin/dashboard" data-nav="dashboard">Panoramica</a>
+          <a class="nav-link" href="/admin/invoices" data-nav="invoices">Fatture</a>
+          <a class="nav-link" href="/admin/transactions" data-nav="transactions">Transazioni</a>
+          <a class="nav-link" href="/admin/risks" data-nav="risks">Rischi</a>
+        </nav>
+
+        <div class="nav-foot">
+          <small>Sessione</small>
+          <button id="autoRefreshBtn" class="btn btn-ghost" type="button">Aggiornamento automatico: OFF</button>
+          <div class="chip-row">
+            <span class="chip">ID breve TX</span>
+            <span class="chip">Hash explorer</span>
+            <span class="chip">Audit eventi</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="card-glass top-glass">
+          <div class="title-stack">
+            <span class="eyebrow">Transazioni</span>
+            <h2>Feed e dettaglio on-chain</h2>
+            <p>Controlla stato, conferme, hash e connessioni con le fatture in un unico flusso operativo.</p>
+          </div>
+
+          <div class="auth-stack">
+            <div class="field">
+              <label for="apiKey">Chiave API amministratore</label>
+              <input id="apiKey" class="input" type="password" autocomplete="off" placeholder="x-api-key" />
+            </div>
+            <div class="actions">
+              <button id="connectBtn" class="btn btn-primary" type="button">Connetti</button>
+              <button id="refreshBtn" class="btn btn-secondary" type="button">Aggiorna</button>
+            </div>
+            <div id="headerNotice" class="notice hidden"></div>
+          </div>
+        </header>
+
+        <section class="metric-grid">
+          <article class="metric-card">
+            <small>Fatture totali</small>
+            <strong id="mInvoicesTotal">-</strong>
+          </article>
+          <article class="metric-card warn">
+            <small>Fatture in attesa</small>
+            <strong id="mInvoicesPending">-</strong>
+          </article>
+          <article class="metric-card ok">
+            <small>Volume pagato (USD)</small>
+            <strong id="mVolumePaid">-</strong>
+          </article>
+          <article class="metric-card">
+            <small>Transazioni confermate</small>
+            <strong id="mTxConfirmed">-</strong>
+          </article>
+        </section>
+
+        <section class="page-grid grid-2">
+          <article class="panel-glass">
+            <div class="panel-head">
+              <div>
+                <h3>Feed transazioni</h3>
+                <p>Ricerca per hash, `TX-*`, UUID o riferimento fattura.</p>
+              </div>
+              <span class="pill">Ultime 200</span>
+            </div>
+
+            <div class="toolbar">
+              <input id="txSearchInput" class="input" type="text" placeholder="Cerca hash tx / TX-... / INV-..." />
+              <select id="txStatusFilter" class="select">
+                <option value="all">Tutti gli stati transazione</option>
+                <option value="awaiting_payment">in attesa pagamento</option>
+                <option value="pending_confirmation">in attesa conferme</option>
+                <option value="confirmed">confermata</option>
+                <option value="cancelled">annullata</option>
+                <option value="expired">scaduta</option>
+              </select>
+              <button id="txSearchBtn" class="btn btn-secondary" type="button">Filtra</button>
+              <button id="txResetBtn" class="btn btn-ghost" type="button">Azzera filtri</button>
+              <button id="exportTxBtn" class="btn btn-ghost" type="button">Esporta CSV</button>
+            </div>
+
+            <div id="transactionsList" class="tx-list"></div>
+            <div id="listNotice" class="notice hidden"></div>
+          </article>
+
+          <article class="panel-glass">
+            <div class="panel-head">
+              <div>
+                <h3>Dettaglio transazione</h3>
+                <p>Apri con short ID, UUID o hash per verifiche puntuali.</p>
+              </div>
+              <span id="selectedTxRef" class="pill">Nessuna selezione</span>
+            </div>
+
+            <div class="toolbar">
+              <input id="txRefInput" class="input" type="text" placeholder="Inserisci TX-... oppure hash tx" />
+              <button id="txLookupBtn" class="btn btn-primary" type="button">Apri dettaglio</button>
+            </div>
+
+            <div id="txDetailCard" class="tx-list"></div>
+
+            <div class="field">
+              <label>Timeline eventi sistema</label>
+              <div id="eventsList" class="log-list"></div>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/admin-common.js?v=20260227-transactions2"></script>
+    <script src="/static/admin-transactions.js?v=20260227-transactions2"></script>
+  </body>
+</html>

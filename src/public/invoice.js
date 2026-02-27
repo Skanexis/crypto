@@ -76,8 +76,8 @@ function showToast(message) {
 
 function setStatusUI(status) {
   const normalized = String(status || "pending").toLowerCase();
-  els.invoiceBadge.className = `badge ${normalized}`;
-  els.statusHintBadge.className = `badge ${normalized}`;
+  els.invoiceBadge.className = `status-badge ${normalized}`;
+  els.statusHintBadge.className = `status-badge ${normalized}`;
   els.invoiceBadge.textContent = localizeStatus(normalized);
   els.statusHintBadge.textContent = localizeStatus(normalized);
 
@@ -158,7 +158,7 @@ function renderWalletCards(payments, invoiceStatus) {
               <h4>${safeCurrency}</h4>
               <span>${safeNetwork}</span>
             </div>
-            <span class="badge ${safeStatusKey}">${escapeHtml(localizeStatus(payment.status))}</span>
+            <span class="status-badge ${safeStatusKey}">${escapeHtml(localizeStatus(payment.status))}</span>
           </div>
 
           <div class="qr-row">
@@ -239,13 +239,15 @@ function renderUnavailable(message) {
   if (state.pollTimer) clearInterval(state.pollTimer);
 
   document.body.innerHTML = `
+    <div class="glow glow-a" aria-hidden="true"></div>
+    <div class="glow glow-b" aria-hidden="true"></div>
     <main class="center-state">
       <section class="state-card">
-        <span class="eyebrow" style="color: #5e6a80">Fattura non disponibile</span>
+        <span class="eyebrow">Fattura non disponibile</span>
         <h2>Pagamento non disponibile</h2>
         <p>${escapeHtml(message)}</p>
-        <div class="actions" style="margin-top: 14px">
-          <a href="/" class="btn btn-primary" style="text-decoration: none">Torna alla dashboard</a>
+        <div class="actions">
+          <a href="/" class="btn btn-primary">Torna alla dashboard</a>
         </div>
       </section>
     </main>

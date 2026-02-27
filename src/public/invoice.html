@@ -3,44 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Checkout Fattura</title>
+    <title>Pagamento Fattura</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/checkout-glass.css?v=20260227-checkout2" />
   </head>
-  <body class="invoice-page">
-    <div class="page-aurora" aria-hidden="true"></div>
+  <body class="checkout-body">
+    <div class="glow glow-a" aria-hidden="true"></div>
+    <div class="glow glow-b" aria-hidden="true"></div>
 
-    <main class="layout-invoice layout-invoice-minimal">
-      <header class="checkout-hero checkout-hero-minimal panel">
-        <div class="checkout-copy">
-          <span class="eyebrow">Checkout Sicuro</span>
-          <h1>Completa il pagamento</h1>
-          <p>Invia l'importo esatto con la rete corretta. Lo stato si aggiorna automaticamente.</p>
-          <div class="hero-chips">
-            <span class="chip">Importo: <strong id="usdAmount">-</strong></span>
-            <span class="chip">Rif: <strong id="invoiceRef">-</strong></span>
-            <span class="chip">Tempo residuo: <strong id="countdown">-</strong></span>
+    <main class="checkout-shell">
+      <header class="glass checkout-head">
+        <div class="head-grid">
+          <div>
+            <span class="eyebrow">Pagamento sicuro</span>
+            <h1>Completa il pagamento</h1>
+            <p>Invia l'importo esatto sulla rete corretta. Lo stato si aggiorna automaticamente.</p>
+            <div class="chip-row">
+              <span class="chip">Importo: <strong id="usdAmount">-</strong></span>
+              <span class="chip">Rif: <strong id="invoiceRef">-</strong></span>
+              <span class="chip">Tempo residuo: <strong id="countdown">-</strong></span>
+            </div>
           </div>
-          <p class="checkout-subline">Scadenza: <strong id="expiresAt">-</strong></p>
-        </div>
 
-        <div class="checkout-status">
-          <span id="invoiceBadge" class="badge pending">in attesa</span>
-          <small id="statusHintBadge" class="muted-status">in attesa</small>
-          <small>Verifica blockchain attiva</small>
+          <aside class="status-panel">
+            <span id="invoiceBadge" class="status-badge pending">in attesa</span>
+            <small id="statusHintBadge">in attesa</small>
+            <small>Scadenza: <strong id="expiresAt">-</strong></small>
+            <small>Verifica blockchain attiva</small>
+          </aside>
         </div>
       </header>
 
-      <section class="panel payment-panel">
+      <section class="glass panel">
         <div class="panel-head">
           <div>
             <h2>Metodi di pagamento</h2>
-            <p>Copiando importo e indirizzo eviti errori.</p>
+            <p>Copia importo e indirizzo per evitare errori.</p>
           </div>
         </div>
 
@@ -49,9 +52,9 @@
         <div id="finalMessage" class="notice hidden"></div>
       </section>
 
-      <details class="panel tech-collapse">
-        <summary>Dati tecnici (facoltativo)</summary>
-        <div class="tech-grid">
+      <details class="glass panel">
+        <summary class="mono">Dati tecnici (facoltativo)</summary>
+        <div class="meta-grid" style="margin-top: 10px">
           <div class="copy-field">
             <small>UUID fattura</small>
             <strong id="invoiceId" class="mono">-</strong>
@@ -73,6 +76,6 @@
     </main>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/static/invoice.js"></script>
+    <script src="/static/invoice.js?v=20260227-checkout2"></script>
   </body>
 </html>

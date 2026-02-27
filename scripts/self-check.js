@@ -19,6 +19,13 @@ process.env.ETH_WALLET_ADDRESS =
 process.env.USDT_NETWORK = process.env.USDT_NETWORK || "TRC20";
 process.env.PAYMENT_WEBHOOK_HMAC_SECRET =
   process.env.PAYMENT_WEBHOOK_HMAC_SECRET || "self-check-secret";
+process.env.STATIC_RATES_USD_JSON =
+  process.env.STATIC_RATES_USD_JSON ||
+  JSON.stringify({
+    USDT: 1,
+    BTC: 65000,
+    ETH: 3200,
+  });
 
 const { db } = require("../src/db");
 const {

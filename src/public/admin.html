@@ -10,55 +10,47 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260227p3" />
   </head>
-  <body class="admin-page">
+  <body class="admin-page premium-admin">
     <div class="page-aurora" aria-hidden="true"></div>
 
-    <div class="admin-app">
-      <aside class="side-rail panel">
-        <div class="side-brand">
+    <div class="app-shell">
+      <aside class="app-nav panel">
+        <div class="app-nav-brand">
           <span class="eyebrow">Payment OS</span>
-          <h1>Console Enterprise</h1>
-          <p>Gestione completa di fatture crypto, transazioni e rischio operativo.</p>
+          <h1>Control Console</h1>
+          <p>Suite operativa per fatture crypto, transazioni e monitor rischi.</p>
         </div>
 
-        <div class="side-section">
-          <small>Navigazione</small>
-          <a class="side-link" href="#sezione-kpi">Panoramica</a>
-          <a class="side-link" href="#sezione-fatture">Fatture</a>
-          <a class="side-link" href="#sezione-dettagli">Dettagli</a>
-          <a class="side-link" href="#sezione-rischi">Monitor rischi</a>
+        <div class="app-nav-links" id="viewSwitch">
+          <a class="view-btn is-active" href="/admin/dashboard" data-admin-view="overview">Panoramica</a>
+          <a class="view-btn" href="/admin/invoices" data-admin-view="invoices">Fatture</a>
+          <a class="view-btn" href="/admin/transactions" data-admin-view="transactions">Transazioni</a>
+          <a class="view-btn" href="/admin/risks" data-admin-view="risks">Rischi</a>
         </div>
 
-        <div class="side-section">
+        <div class="app-nav-foot">
           <small>Operazioni rapide</small>
           <button id="autoRefreshBtn" class="btn btn-ghost" type="button">Aggiornamento automatico: OFF</button>
-        </div>
-
-        <div class="side-section">
-          <small>Reti abilitate</small>
           <div class="hero-chips">
             <span class="chip">USDT TRC20</span>
             <span class="chip">BTC</span>
             <span class="chip">ETH</span>
-            <span class="chip">ID INV/TX</span>
+            <span class="chip">INV/TX</span>
           </div>
         </div>
       </aside>
 
-      <main class="layout-admin">
-        <header class="topbar panel">
-          <div class="brand-block">
+      <main class="app-main">
+        <header class="main-head panel">
+          <div class="main-head-copy">
             <span class="eyebrow">Centro Operativo</span>
-            <h1>Console Pagamenti Enterprise</h1>
-            <p>
-              Ambiente unico per creazione fatture, monitor blockchain, audit eventi e controllo anomalie in tempo
-              reale.
-            </p>
+            <h2>Console Pagamenti Enterprise</h2>
+            <p>Gestione pagamenti con dati live, controlli rapidi e visibilita completa dell'operativita.</p>
           </div>
 
-          <div class="auth-card">
+          <div class="main-head-auth">
             <div class="field field-compact">
               <label for="apiKey">Chiave API amministratore</label>
               <input id="apiKey" class="input" type="password" autocomplete="off" placeholder="x-api-key" />
@@ -67,163 +59,198 @@
               <button id="connectBtn" class="btn btn-primary" type="button">Connetti</button>
               <button id="refreshBtn" class="btn btn-secondary" type="button">Aggiorna</button>
             </div>
-            <small>La chiave resta solo nel browser locale.</small>
           </div>
         </header>
 
-        <section class="kpi-grid" id="metricsGrid">
-          <article class="kpi-card" id="sezione-kpi">
-            <small>Fatture totali</small>
-            <strong id="mInvoicesTotal">-</strong>
-          </article>
-          <article class="kpi-card warn">
-            <small>Fatture in attesa</small>
-            <strong id="mInvoicesPending">-</strong>
-          </article>
-          <article class="kpi-card ok">
-            <small>Volume pagato (USD)</small>
-            <strong id="mVolumePaid">-</strong>
-          </article>
-          <article class="kpi-card">
-            <small>Transazioni confermate</small>
-            <strong id="mTxConfirmed">-</strong>
-          </article>
+        <section class="admin-view is-active" data-view="overview">
+          <section class="kpi-grid" id="metricsGrid">
+            <article class="kpi-card">
+              <small>Fatture totali</small>
+              <strong id="mInvoicesTotal">-</strong>
+            </article>
+            <article class="kpi-card warn">
+              <small>Fatture in attesa</small>
+              <strong id="mInvoicesPending">-</strong>
+            </article>
+            <article class="kpi-card ok">
+              <small>Volume pagato (USD)</small>
+              <strong id="mVolumePaid">-</strong>
+            </article>
+            <article class="kpi-card">
+              <small>Transazioni confermate</small>
+              <strong id="mTxConfirmed">-</strong>
+            </article>
+          </section>
+
+          <section class="workspace-grid workspace-grid-overview">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Nuova fattura</h2>
+                  <p>Crea una richiesta pagamento e invia subito il link cliente.</p>
+                </div>
+                <span class="pill">Creazione</span>
+              </div>
+
+              <div class="field">
+                <label for="amountUsd">Importo USD</label>
+                <input id="amountUsd" class="input" type="text" inputmode="decimal" value="100.00" />
+              </div>
+
+              <div class="field">
+                <label for="telegramUserId">ID Telegram cliente (opzionale)</label>
+                <input id="telegramUserId" class="input" type="text" placeholder="es. 123456789" />
+              </div>
+
+              <div class="field">
+                <label>Valute abilitate</label>
+                <div class="currency-grid">
+                  <label class="currency-item"><input type="checkbox" value="USDT" checked />USDT</label>
+                  <label class="currency-item"><input type="checkbox" value="BTC" checked />BTC</label>
+                  <label class="currency-item"><input type="checkbox" value="ETH" checked />ETH</label>
+                </div>
+              </div>
+
+              <div class="actions">
+                <button id="createBtn" class="btn btn-primary" type="button">Crea fattura</button>
+                <button id="verifyBtn" class="btn btn-ghost" type="button">Verifica on-chain ora</button>
+                <button id="deleteAllBtn" class="btn btn-danger" type="button">Elimina tutte</button>
+              </div>
+
+              <div id="createNotice" class="notice hidden"></div>
+            </article>
+
+            <article class="panel status-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Stato sistema</h2>
+                  <p>Connettiti e usa i tab a sinistra per operazioni avanzate.</p>
+                </div>
+                <span class="pill">Pronto</span>
+              </div>
+
+              <div class="status-cards">
+                <div class="status-card">
+                  <small>Fatture</small>
+                  <strong>Creazione, ricerca, cancellazione</strong>
+                </div>
+                <div class="status-card">
+                  <small>Transazioni</small>
+                  <strong>Hash, explorer, dettagli e conferme</strong>
+                </div>
+                <div class="status-card">
+                  <small>Rischi</small>
+                  <strong>Alert automatici su incongruenze</strong>
+                </div>
+              </div>
+            </article>
+          </section>
         </section>
 
-        <section class="workspace-grid" id="sezione-fatture">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Nuova fattura</h2>
-                <p>Crea una richiesta pagamento pronta per bot Telegram e pagina cliente.</p>
+        <section class="admin-view" data-view="invoices">
+          <section class="workspace-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Registro fatture</h2>
+                  <p>Ricerca rapida per riferimento, UUID o token.</p>
+                </div>
+                <span class="pill">Archivio</span>
               </div>
-              <span class="pill">Creazione</span>
-            </div>
 
-            <div class="field">
-              <label for="amountUsd">Importo USD</label>
-              <input id="amountUsd" class="input" type="text" inputmode="decimal" value="100.00" />
-            </div>
-
-            <div class="field">
-              <label for="telegramUserId">ID Telegram cliente (opzionale)</label>
-              <input id="telegramUserId" class="input" type="text" placeholder="es. 123456789" />
-            </div>
-
-            <div class="field">
-              <label>Valute abilitate</label>
-              <div class="currency-grid">
-                <label class="currency-item"><input type="checkbox" value="USDT" checked />USDT</label>
-                <label class="currency-item"><input type="checkbox" value="BTC" checked />BTC</label>
-                <label class="currency-item"><input type="checkbox" value="ETH" checked />ETH</label>
+              <div class="toolbar">
+                <select id="statusFilter" class="select">
+                  <option value="all">Tutti gli stati</option>
+                  <option value="pending">in attesa</option>
+                  <option value="paid">pagata</option>
+                  <option value="expired">scaduta</option>
+                  <option value="cancelled">annullata</option>
+                </select>
+                <input id="searchInput" class="input" type="text" placeholder="Cerca INV-..., UUID, token" />
+                <button id="searchBtn" class="btn btn-secondary" type="button">Cerca</button>
+                <button id="exportInvoicesBtn" class="btn btn-ghost" type="button">Esporta CSV fatture</button>
               </div>
-            </div>
 
-            <div class="actions">
-              <button id="createBtn" class="btn btn-primary" type="button">Crea fattura</button>
-              <button id="verifyBtn" class="btn btn-ghost" type="button">Verifica on-chain ora</button>
-              <button id="deleteAllBtn" class="btn btn-danger" type="button">Elimina tutte</button>
-            </div>
-
-            <div id="createNotice" class="notice hidden"></div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Registro fatture</h2>
-                <p>Ricerca rapida per riferimento, UUID o token.</p>
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Rif</th>
+                      <th>Importo</th>
+                      <th>Stato</th>
+                      <th>Scadenza</th>
+                      <th>Telegram</th>
+                      <th>Aggiornata</th>
+                      <th>Hash tx</th>
+                      <th>Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody id="invoiceTableBody"></tbody>
+                </table>
               </div>
-              <span class="pill">Archivio</span>
-            </div>
 
-            <div class="toolbar">
-              <select id="statusFilter" class="select">
-                <option value="all">Tutti gli stati</option>
-                <option value="pending">in attesa</option>
-                <option value="paid">pagata</option>
-                <option value="expired">scaduta</option>
-                <option value="cancelled">annullata</option>
-              </select>
-              <input id="searchInput" class="input" type="text" placeholder="Cerca INV-..., UUID, token" />
-              <button id="searchBtn" class="btn btn-secondary" type="button">Cerca</button>
-              <button id="exportInvoicesBtn" class="btn btn-ghost" type="button">Esporta CSV fatture</button>
-            </div>
+              <div id="listNotice" class="notice hidden"></div>
+            </article>
 
-            <div class="table-wrap">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Rif</th>
-                    <th>Importo</th>
-                    <th>Stato</th>
-                    <th>Scadenza</th>
-                    <th>Telegram</th>
-                    <th>Aggiornata</th>
-                    <th>Hash tx</th>
-                    <th>Azioni</th>
-                  </tr>
-                </thead>
-                <tbody id="invoiceTableBody"></tbody>
-              </table>
-            </div>
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Dettagli fattura</h2>
+                  <p>Stato corrente, pagamenti collegati e conferma manuale.</p>
+                </div>
+                <span id="selectedRef" class="pill">Nessuna selezione</span>
+              </div>
 
-            <div id="listNotice" class="notice hidden"></div>
-          </article>
+              <div id="detailSummary" class="kv"></div>
+
+              <div class="field">
+                <label>Transazioni fattura</label>
+                <div id="paymentsList" class="tx-list"></div>
+              </div>
+
+              <div class="field">
+                <label>Conferma manuale pagamento</label>
+                <div class="stack">
+                  <select id="markPaidCurrency" class="select"></select>
+                  <input id="markPaidTxHash" class="input" type="text" placeholder="Hash tx (opzionale)" />
+                  <input
+                    id="markPaidAmount"
+                    class="input"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="Importo pagato crypto (opzionale)"
+                  />
+                  <button id="markPaidBtn" class="btn btn-primary" type="button">Segna come pagata</button>
+                </div>
+              </div>
+
+              <div id="detailNotice" class="notice hidden"></div>
+            </article>
+          </section>
         </section>
 
-        <section class="workspace-grid" id="sezione-dettagli">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Dettagli fattura</h2>
-                <p>Stato corrente, pagamenti collegati e conferma manuale.</p>
+        <section class="admin-view" data-view="transactions">
+          <section class="workspace-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Eventi</h2>
+                  <p>Timeline audit di tutte le azioni sistema.</p>
+                </div>
+                <span class="pill">Log</span>
               </div>
-              <span id="selectedRef" class="pill">Nessuna selezione</span>
-            </div>
-
-            <div id="detailSummary" class="kv"></div>
-
-            <div class="field">
-              <label>Transazioni fattura</label>
-              <div id="paymentsList" class="tx-list"></div>
-            </div>
-
-            <div class="field">
-              <label>Conferma manuale pagamento</label>
-              <div class="stack">
-                <select id="markPaidCurrency" class="select"></select>
-                <input id="markPaidTxHash" class="input" type="text" placeholder="Hash tx (opzionale)" />
-                <input
-                  id="markPaidAmount"
-                  class="input"
-                  type="text"
-                  inputmode="decimal"
-                  placeholder="Importo pagato crypto (opzionale)"
-                />
-                <button id="markPaidBtn" class="btn btn-primary" type="button">Segna come pagata</button>
-              </div>
-            </div>
-
-            <div id="detailNotice" class="notice hidden"></div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Eventi e transazioni</h2>
-                <p>Log audit e feed operativo in tempo reale.</p>
-              </div>
-              <span class="pill">Operativita</span>
-            </div>
-
-            <div class="field">
-              <label>Eventi</label>
               <div id="eventsList" class="log-list"></div>
-            </div>
+            </article>
 
-            <div class="field">
-              <label>Feed transazioni</label>
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Feed transazioni</h2>
+                  <p>Ricerca per hash, riferimento TX o fattura.</p>
+                </div>
+                <span class="pill">Live</span>
+              </div>
+
               <div class="toolbar">
                 <input id="txSearchInput" class="input" type="text" placeholder="Cerca hash tx / TX-... / INV-..." />
                 <select id="txStatusFilter" class="select">
@@ -238,40 +265,43 @@
                 <button id="txResetBtn" class="btn btn-ghost" type="button">Azzera filtri</button>
                 <button id="exportTxBtn" class="btn btn-ghost" type="button">Esporta CSV tx</button>
               </div>
-              <div id="transactionsList" class="tx-list"></div>
-            </div>
 
-            <div class="field">
-              <label>Dettaglio transazione</label>
-              <div class="toolbar">
-                <input id="txRefInput" class="input" type="text" placeholder="Inserisci TX-... oppure hash tx" />
-                <button id="txLookupBtn" class="btn btn-secondary" type="button">Apri dettaglio</button>
+              <div id="transactionsList" class="tx-list"></div>
+
+              <div class="field">
+                <label>Dettaglio transazione</label>
+                <div class="toolbar">
+                  <input id="txRefInput" class="input" type="text" placeholder="Inserisci TX-... oppure hash tx" />
+                  <button id="txLookupBtn" class="btn btn-secondary" type="button">Apri dettaglio</button>
+                </div>
+                <div id="txDetailCard" class="tx-list"></div>
               </div>
-              <div id="txDetailCard" class="tx-list"></div>
-            </div>
-          </article>
+            </article>
+          </section>
         </section>
 
-        <section class="panel" id="sezione-rischi">
-          <div class="panel-head">
-            <div>
-              <h2>Monitor rischi</h2>
-              <p>Segnalazioni automatiche su mismatch, latenze e anomalie.</p>
+        <section class="admin-view" data-view="risks">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Monitor rischi</h2>
+                <p>Segnalazioni automatiche su mismatch, latenze e anomalie.</p>
+              </div>
+              <span id="riskTotalBadge" class="pill">0 avvisi</span>
             </div>
-            <span id="riskTotalBadge" class="pill">0 avvisi</span>
-          </div>
 
-          <div class="toolbar">
-            <button id="riskRefreshBtn" class="btn btn-secondary" type="button">Aggiorna rischi</button>
-          </div>
+            <div class="toolbar">
+              <button id="riskRefreshBtn" class="btn btn-secondary" type="button">Aggiorna rischi</button>
+            </div>
 
-          <div id="riskSummary" class="kv"></div>
-          <div id="riskAlerts" class="tx-list"></div>
+            <div id="riskSummary" class="kv"></div>
+            <div id="riskAlerts" class="tx-list"></div>
+          </section>
         </section>
       </main>
     </div>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/static/admin.js"></script>
+    <script src="/static/admin.js?v=20260227p3"></script>
   </body>
 </html>

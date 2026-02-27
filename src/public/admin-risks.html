@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Monitor Rischi</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/admin-glass.css?v=20260227-risks2" />
+  </head>
+  <body class="admin-glass-body">
+    <div class="glow glow-a" aria-hidden="true"></div>
+    <div class="glow glow-b" aria-hidden="true"></div>
+    <div class="glow glow-c" aria-hidden="true"></div>
+
+    <div class="admin-shell">
+      <aside class="card-glass nav-glass">
+        <div class="brand">
+          <span class="eyebrow">Sistema Pagamenti</span>
+          <h1>Console Operativa</h1>
+          <p>Monitor proattivo su anomalie e incoerenze di fatture e transazioni.</p>
+        </div>
+
+        <nav class="nav-links">
+          <a class="nav-link" href="/admin/dashboard" data-nav="dashboard">Panoramica</a>
+          <a class="nav-link" href="/admin/invoices" data-nav="invoices">Fatture</a>
+          <a class="nav-link" href="/admin/transactions" data-nav="transactions">Transazioni</a>
+          <a class="nav-link" href="/admin/risks" data-nav="risks">Rischi</a>
+        </nav>
+
+        <div class="nav-foot">
+          <small>Sessione</small>
+          <button id="autoRefreshBtn" class="btn btn-ghost" type="button">Aggiornamento automatico: OFF</button>
+          <div class="chip-row">
+            <span class="chip">Critici</span>
+            <span class="chip">Alti</span>
+            <span class="chip">Medi</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="card-glass top-glass">
+          <div class="title-stack">
+            <span class="eyebrow">Motore rischi</span>
+            <h2>Monitor rischi e anomalie</h2>
+            <p>Audit continuo su hash duplicati, mismatch importi, latenze e stati incoerenti.</p>
+          </div>
+
+          <div class="auth-stack">
+            <div class="field">
+              <label for="apiKey">Chiave API amministratore</label>
+              <input id="apiKey" class="input" type="password" autocomplete="off" placeholder="x-api-key" />
+            </div>
+            <div class="actions">
+              <button id="connectBtn" class="btn btn-primary" type="button">Connetti</button>
+              <button id="refreshBtn" class="btn btn-secondary" type="button">Aggiorna</button>
+            </div>
+            <div id="headerNotice" class="notice hidden"></div>
+          </div>
+        </header>
+
+        <section class="metric-grid">
+          <article class="metric-card">
+            <small>Fatture totali</small>
+            <strong id="mInvoicesTotal">-</strong>
+          </article>
+          <article class="metric-card warn">
+            <small>Fatture in attesa</small>
+            <strong id="mInvoicesPending">-</strong>
+          </article>
+          <article class="metric-card ok">
+            <small>Volume pagato (USD)</small>
+            <strong id="mVolumePaid">-</strong>
+          </article>
+          <article class="metric-card">
+            <small>Transazioni confermate</small>
+            <strong id="mTxConfirmed">-</strong>
+          </article>
+        </section>
+
+        <section class="panel-glass">
+          <div class="panel-head">
+            <div>
+              <h3>Quadro rischi</h3>
+              <p>Panoramica severita e dettaglio alert azionabili.</p>
+            </div>
+            <div class="inline-actions">
+              <span id="riskTotalBadge" class="pill">0 avvisi</span>
+              <button id="riskRefreshBtn" class="btn btn-secondary" type="button">Aggiorna rischi</button>
+            </div>
+          </div>
+
+          <div id="riskSummaryGrid" class="risk-grid"></div>
+
+          <div class="field">
+            <label>Distribuzione codici rischio</label>
+            <div id="riskCodesList" class="tx-list"></div>
+          </div>
+
+          <div class="field">
+            <label>Alert monitor</label>
+            <div id="riskAlerts" class="tx-list"></div>
+          </div>
+
+          <div id="listNotice" class="notice hidden"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/admin-common.js?v=20260227-risks2"></script>
+    <script src="/static/admin-risks.js?v=20260227-risks2"></script>
+  </body>
+</html>

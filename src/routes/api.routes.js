@@ -383,6 +383,22 @@ router.post(
   requireAdminApiKey,
   async (req, res, next) => {
     try {
+      const rawTxHash = req.body.tx_hash;
+      const rawPaidAmount = req.body.paid_amount_crypto;
+      const hasTxHash = Boolean(String(rawTxHash || "").trim());
+      const hasPaidAmount =
+        rawPaidAmount !== undefined &&
+        rawPaidAmount !== null &&
+        String(rawPaidAmount).trim() !== "";
+      if (!hasTxHash && !hasPaidAmount) {
+        res.status(400).json({
+          error: "Bad Request",
+          message:
+            "Per conferma manuale serve tx_hash o paid_amount_crypto",
+        });
+        return;
+      }
+
       const invoiceId = resolveInvoiceIdByRef(req.params.invoiceRef);
       if (!invoiceId) {
         res.status(404).json({

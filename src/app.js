@@ -35,7 +35,23 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/admin", (_req, res) => {
-  res.sendFile(path.join(publicDir, "admin.html"));
+  res.redirect("/admin/dashboard");
+});
+
+app.get("/admin/dashboard", (_req, res) => {
+  res.sendFile(path.join(publicDir, "admin-dashboard.html"));
+});
+
+app.get("/admin/invoices", (_req, res) => {
+  res.sendFile(path.join(publicDir, "admin-invoices.html"));
+});
+
+app.get("/admin/transactions", (_req, res) => {
+  res.sendFile(path.join(publicDir, "admin-transactions.html"));
+});
+
+app.get("/admin/risks", (_req, res) => {
+  res.sendFile(path.join(publicDir, "admin-risks.html"));
 });
 
 app.get("/pay/:token", (req, res) => {

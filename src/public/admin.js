@@ -1,5 +1,22 @@
 const AUTO_REFRESH_INTERVAL_MS = 15000;
 const API_KEY_STORAGE_KEY = "enterprise_payments_admin_api_key";
+const ACTIVE_VIEW_STORAGE_KEY = "enterprise_payments_admin_active_view";
+const VALID_ADMIN_VIEWS = new Set(["overview", "invoices", "transactions", "risks"]);
+
+const VIEW_TO_PATH = {
+  overview: "/admin/dashboard",
+  invoices: "/admin/invoices",
+  transactions: "/admin/transactions",
+  risks: "/admin/risks",
+};
+
+function pathToView(pathname) {
+  const path = String(pathname || "").toLowerCase();
+  if (path === "/admin/invoices") return "invoices";
+  if (path === "/admin/transactions") return "transactions";
+  if (path === "/admin/risks") return "risks";
+  return "overview";
+}
 
 const els = {
   apiKey: document.getElementById("apiKey"),
@@ -61,6 +78,7 @@ const state = {
   autoRefreshTimer: null,
   refreshInFlight: false,
   toastTimer: null,
+  activeView: "overview",
 };
 
 function escapeHtml(value) {
@@ -201,6 +219,55 @@ function hasTxFilters() {
   const query = String(els.txSearchInput?.value || "").trim();
   const status = String(els.txStatusFilter?.value || "all");
   return Boolean(query) || status !== "all";
+}
+
+function setActiveAdminView(view, { persist = true, syncUrl = false } = {}) {
+  const normalized = String(view || "").trim().toLowerCase();
+  if (!VALID_ADMIN_VIEWS.has(normalized)) {
+    return;
+  }
+
+  state.activeView = normalized;
+
+  document.querySelectorAll(".admin-view").forEach((section) => {
+    const isMatch = section.dataset.view === normalized;
+    section.classList.toggle("is-active", isMatch);
+  });
+
+  document.querySelectorAll("[data-admin-view]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.adminView === normalized);
+  });
+
+  if (syncUrl) {
+    const targetPath = VIEW_TO_PATH[normalized];
+    if (targetPath && window.location.pathname !== targetPath) {
+      window.history.replaceState({}, "", targetPath);
+    }
+  }
+
+  if (persist) {
+    window.localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, normalized);
+  }
+}
+
+function initAdminViewSwitch() {
+  document.querySelectorAll("[data-admin-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.tagName === "A") {
+        return;
+      }
+      setActiveAdminView(button.dataset.adminView, { syncUrl: true });
+    });
+  });
+
+  const fromPath = pathToView(window.location.pathname);
+  const saved = window.localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY);
+  const initialView =
+    fromPath ||
+    (saved && VALID_ADMIN_VIEWS.has(saved) ? saved : "overview");
+  setActiveAdminView(initialView, {
+    persist: false,
+  });
 }
 
 function updateAutoRefreshButton() {
@@ -1102,6 +1169,7 @@ els.txResetBtn.addEventListener("click", async () => {
 els.txLookupBtn.addEventListener("click", async () => {
   setBusy(els.txLookupBtn, true, "Carico...");
   try {
+    setActiveAdminView("transactions", { syncUrl: true });
     await loadTransactionDetail(els.txRefInput.value.trim(), false);
     showToast("Dettaglio tx caricato");
   } catch (error) {
@@ -1115,6 +1183,7 @@ els.txRefInput.addEventListener("keydown", async (event) => {
   if (event.key !== "Enter") return;
   event.preventDefault();
   try {
+    setActiveAdminView("transactions", { syncUrl: true });
     await loadTransactionDetail(els.txRefInput.value.trim(), false);
   } catch (error) {
     setNotice(els.listNotice, error.message, "error");
@@ -1258,6 +1327,7 @@ els.txDetailCard.addEventListener("click", async (event) => {
   const invoiceBtn = event.target.closest("button[data-action='open-invoice-from-tx']");
   if (invoiceBtn && !invoiceBtn.disabled) {
     try {
+      setActiveAdminView("invoices", { syncUrl: true });
       await loadInvoiceDetails(invoiceBtn.dataset.ref);
       showToast("Dettaglio fattura caricato");
     } catch (error) {
@@ -1275,6 +1345,7 @@ els.riskAlerts.addEventListener("click", async (event) => {
   const invoiceBtn = event.target.closest("button[data-risk-open-invoice]");
   if (invoiceBtn && !invoiceBtn.disabled) {
     try {
+      setActiveAdminView("invoices", { syncUrl: true });
       await loadInvoiceDetails(invoiceBtn.dataset.riskOpenInvoice);
       showToast("Fattura aperta dal monitor rischi");
     } catch (error) {
@@ -1286,6 +1357,7 @@ els.riskAlerts.addEventListener("click", async (event) => {
   const txBtn = event.target.closest("button[data-risk-open-tx]");
   if (txBtn && !txBtn.disabled) {
     try {
+      setActiveAdminView("transactions", { syncUrl: true });
       await loadTransactionDetail(txBtn.dataset.riskOpenTx);
       showToast("Tx aperta dal monitor rischi");
     } catch (error) {
@@ -1326,6 +1398,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 restoreApiKey();
+initAdminViewSwitch();
 updateAutoRefreshButton();
 renderInvoiceTable();
 renderInvoiceDetails();
