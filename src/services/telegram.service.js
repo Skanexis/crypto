@@ -61,6 +61,29 @@ const ADMIN_INTENTS = {
   CANCEL: "cancel",
 };
 
+const USER_COMMANDS = [
+  { command: "start", description: "Avvia il bot" },
+  { command: "my_invoices", description: "Mostra le tue fatture aperte" },
+  { command: "mie_fatture", description: "Mostra le tue fatture aperte" },
+  { command: "help", description: "Mostra aiuto" },
+  { command: "aiuto", description: "Mostra aiuto" },
+];
+
+const ADMIN_ONLY_COMMANDS = [
+  { command: "admin", description: "Apri panoramica admin" },
+  { command: "nuova_fattura", description: "Crea nuova fattura" },
+  { command: "fatture_in_attesa", description: "Lista fatture aperte" },
+  { command: "stato_fattura", description: "Stato fattura per riferimento" },
+  { command: "dettaglio_fattura", description: "Dettagli fattura e log" },
+  { command: "flusso_tx", description: "Feed transazioni confermate" },
+  { command: "stato_tx", description: "Dettaglio transazione" },
+  { command: "verify_now", description: "Esegui verifica pagamenti" },
+  { command: "risk_monitor", description: "Mostra monitor rischi" },
+  { command: "elimina_fattura", description: "Elimina una fattura" },
+  { command: "elimina_tutte_fatture", description: "Elimina tutte le fatture" },
+  { command: "cancel", description: "Annulla azione corrente" },
+];
+
 function adminKeyboard() {
   return {
     reply_markup: {
@@ -81,6 +104,14 @@ function adminKeyboard() {
 
 function botEnabled() {
   return Boolean(config.botToken);
+}
+
+function userKeyboard() {
+  return {
+    reply_markup: {
+      remove_keyboard: true,
+    },
+  };
 }
 
 function isAdminTelegramUser(telegramUserId) {
@@ -246,6 +277,59 @@ function isAdminControlText(textRaw) {
   return Boolean(detectAdminIntent(textRaw));
 }
 
+function parseIntentAndArg(textRaw) {
+  const raw = String(textRaw || "").trim();
+  const normalized = normalizeControlText(raw);
+  if (!normalized) {
+    return {
+      intent: null,
+      arg: "",
+    };
+  }
+
+  if (ADMIN_INTENT_LOOKUP.has(normalized)) {
+    return {
+      intent: ADMIN_INTENT_LOOKUP.get(normalized),
+      arg: "",
+    };
+  }
+
+  const rawFirstToken = raw.split(/\s+/)[0] || "";
+  if (rawFirstToken) {
+    const normalizedFirstToken = normalizeControlText(rawFirstToken);
+    if (ADMIN_INTENT_LOOKUP.has(normalizedFirstToken)) {
+      return {
+        intent: ADMIN_INTENT_LOOKUP.get(normalizedFirstToken),
+        arg: raw.slice(rawFirstToken.length).trim(),
+      };
+    }
+
+    const normalizedTokenWithoutBot = normalizedFirstToken.replace(/@[\w_]+$/i, "");
+    if (ADMIN_INTENT_LOOKUP.has(normalizedTokenWithoutBot)) {
+      return {
+        intent: ADMIN_INTENT_LOOKUP.get(normalizedTokenWithoutBot),
+        arg: raw.slice(rawFirstToken.length).trim(),
+      };
+    }
+  }
+
+  const rawParts = raw.split(/\s+/).filter(Boolean);
+  const sortedAliases = [...ADMIN_INTENT_LOOKUP.keys()].sort((a, b) => b.length - a.length);
+  for (const alias of sortedAliases) {
+    if (!normalized.startsWith(`${alias} `)) {
+      continue;
+    }
+    const aliasWordCount = alias.split(" ").filter(Boolean).length;
+    const rawArg = rawParts.slice(aliasWordCount).join(" ").trim();
+    return {
+      intent: ADMIN_INTENT_LOOKUP.get(alias),
+      arg: rawArg,
+    };
+  }
+
+  return { intent: null, arg: "" };
+}
+
 async function callTelegramApi(method, payload) {
   if (!botEnabled()) {
     throw new Error("Bot Telegram non configurato");
@@ -274,6 +358,37 @@ async function sendMessage(chatId, text, extra = {}) {
     disable_web_page_preview: true,
     ...extra,
   });
+}
+
+async function setMyCommands(commands, scope = null) {
+  const payload = {
+    commands,
+    language_code: "it",
+  };
+  if (scope) {
+    payload.scope = scope;
+  }
+  return callTelegramApi("setMyCommands", payload);
+}
+
+async function configureBotCommands() {
+  await setMyCommands(USER_COMMANDS);
+
+  const adminCommands = [...USER_COMMANDS, ...ADMIN_ONLY_COMMANDS];
+  for (const adminId of config.adminTelegramIds || []) {
+    const normalized = String(adminId || "").trim();
+    if (!normalized) {
+      continue;
+    }
+    try {
+      await setMyCommands(adminCommands, {
+        type: "chat",
+        chat_id: normalized,
+      });
+    } catch (_error) {
+      // Ignore per-chat command scope errors (e.g. admin chat not started yet).
+    }
+  }
 }
 
 function shortHash(value, size = 10) {
@@ -509,6 +624,7 @@ async function handleStart(message) {
     await sendMessage(
       message.chat.id,
       "Benvenuto. Al momento non ci sono fatture aperte associate al tuo account.",
+      userKeyboard(),
     );
     return;
   }
@@ -521,7 +637,7 @@ async function handleStart(message) {
       ? "Usa /my_invoices per vedere tutte le fatture aperte."
       : "Apri il link per completare il pagamento.");
 
-  await sendMessage(message.chat.id, text);
+  await sendMessage(message.chat.id, text, userKeyboard());
 }
 
 async function handleHelp(message) {
@@ -533,7 +649,7 @@ async function handleHelp(message) {
     "/help o /aiuto - Mostra questo aiuto";
 
   if (!isAdmin) {
-    await sendMessage(message.chat.id, baseText);
+    await sendMessage(message.chat.id, baseText, userKeyboard());
     return;
   }
 
@@ -559,12 +675,12 @@ async function handleMyInvoices(message) {
   const userId = String(message.from.id);
   const invoices = listOpenInvoicesForTelegramUser(userId);
   if (!invoices.length) {
-    await sendMessage(message.chat.id, "Non hai fatture aperte.");
+    await sendMessage(message.chat.id, "Non hai fatture aperte.", userKeyboard());
     return;
   }
 
   const text = invoices.map((invoice) => formatInvoiceLine(invoice)).join("\n\n");
-  await sendMessage(message.chat.id, text);
+  await sendMessage(message.chat.id, text, userKeyboard());
 }
 
 async function createInvoiceFromArgs(message, args) {
@@ -727,6 +843,63 @@ function localizeRiskSeverity(severity) {
   return key || "n/d";
 }
 
+function formatRiskAlertDetails(alert) {
+  const details = alert?.details && typeof alert.details === "object" ? alert.details : {};
+  const parts = [];
+
+  if (Number.isFinite(Number(details.amountUsd))) {
+    parts.push(`${Number(details.amountUsd).toFixed(2)} USD`);
+  }
+  if (details.currency) {
+    parts.push(String(details.currency).toUpperCase());
+  }
+  if (Number.isFinite(Number(details.confirmations))) {
+    if (Number.isFinite(Number(details.requiredConfirmations))) {
+      parts.push(`conf ${Number(details.confirmations)}/${Number(details.requiredConfirmations)}`);
+    } else {
+      parts.push(`conf ${Number(details.confirmations)}`);
+    }
+  }
+  if (Number.isFinite(Number(details.staleMinutes))) {
+    parts.push(`fermo ${Number(details.staleMinutes)}m`);
+  }
+  if (Number.isFinite(Number(details.overdueMinutes))) {
+    parts.push(`oltre soglia ${Number(details.overdueMinutes)}m`);
+  }
+
+  return parts.join(" | ");
+}
+
+function formatRiskAlertBlock(alert, index) {
+  const invoiceRef = String(alert?.invoiceRef || "").trim();
+  const txRef = String(alert?.txRef || "").trim();
+  const txHash = String(alert?.txHash || "").trim();
+  const lines = [
+    `${index + 1}. ${localizeRiskSeverity(alert?.severity).toUpperCase()} | ${String(
+      alert?.title || alert?.code || "Alert",
+    ).trim()}`,
+  ];
+
+  if (invoiceRef) {
+    lines.push(`Fattura: ${invoiceRef}`);
+  }
+  if (txRef) {
+    lines.push(`Pagamento: ${txRef}`);
+  }
+  if (txHash) {
+    lines.push(`Tx hash: ${shortHash(txHash, 24)}`);
+  }
+
+  const detailLine = formatRiskAlertDetails(alert);
+  if (detailLine) {
+    lines.push(`Dettagli: ${detailLine}`);
+  } else if (alert?.description) {
+    lines.push(`Dettagli: ${String(alert.description).trim()}`);
+  }
+
+  return lines.join("\n");
+}
+
 async function showRiskMonitor(message) {
   const monitor = getRiskMonitor({ limit: 12 });
   const summary = monitor.summary || {
@@ -740,19 +913,15 @@ async function showRiskMonitor(message) {
   const alertsText =
     (monitor.alerts || [])
       .slice(0, 6)
-      .map((alert) => {
-        const invoiceRef = alert.invoiceRef || "-";
-        const txRef = alert.txRef || "-";
-        return `${localizeRiskSeverity(alert.severity)} | ${alert.code} | inv ${invoiceRef} | tx ${txRef}`;
-      })
-      .join("\n") || "Nessun alert attivo";
+      .map((alert, index) => formatRiskAlertBlock(alert, index))
+      .join("\n\n") || "Nessun alert attivo";
 
   const text =
     `Monitor rischi\n` +
     `Totale: ${summary.total} (critici ${summary.critical}, alti ${summary.high}, medi ${summary.medium})\n` +
     `Visualizzati: ${summary.displayed}\n` +
     `Aggiornato: ${new Date(monitor.generatedAt).toLocaleString("it-IT")}\n\n` +
-    `Top alert:\n${alertsText}`;
+    `Alert principali:\n${alertsText}`;
 
   await sendMessage(message.chat.id, text, adminKeyboard());
 }
@@ -842,7 +1011,8 @@ async function handleAdminSessionInput(message, text) {
     return false;
   }
 
-  const intent = detectAdminIntent(text);
+  const parsed = parseIntentAndArg(text);
+  const intent = parsed.intent;
   if (intent === ADMIN_INTENTS.CANCEL) {
     clearAdminSession(message.chat.id);
     await sendAdminDashboard(message.chat.id, "Azione annullata.");
@@ -951,7 +1121,8 @@ async function handleAdminMessage(message, text) {
     return true;
   }
 
-  const intent = detectAdminIntent(text);
+  const parsed = parseIntentAndArg(text);
+  const intent = parsed.intent;
   if (!intent) {
     return false;
   }
@@ -983,8 +1154,7 @@ async function handleAdminMessage(message, text) {
     return true;
   }
 
-  const parts = text.trim().split(/\s+/);
-  const arg = parts.length >= 2 ? parts.slice(1).join(" ") : "";
+  const arg = String(parsed.arg || "").trim();
 
   if (intent === ADMIN_INTENTS.STATUS) {
     if (!arg) {
@@ -1087,6 +1257,7 @@ async function handleMessage(message) {
     await sendMessage(
       message.chat.id,
       "Comando riservato all'amministratore.",
+      userKeyboard(),
     );
   }
 }
@@ -1117,11 +1288,14 @@ async function setWebhook() {
     throw new Error("APP_BASE_URL deve iniziare con https:// per registrare il webhook Telegram.");
   }
   const webhookUrl = `${config.appBaseUrl}/telegram/webhook/${config.botWebhookSecret}`;
-  return callTelegramApi("setWebhook", {
+  const webhookResult = await callTelegramApi("setWebhook", {
     url: webhookUrl,
     allowed_updates: ["message"],
     drop_pending_updates: false,
   });
+
+  await configureBotCommands();
+  return webhookResult;
 }
 
 module.exports = {

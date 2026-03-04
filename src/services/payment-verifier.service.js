@@ -3,9 +3,14 @@ const { logEvent } = require("../db");
 const {
   listPendingPaymentsForCurrencies,
   markInvoicePaid,
+  markPaymentPendingConfirmation,
   isTxHashAlreadyUsed,
+  requiredConfirmationsForPayment,
 } = require("./invoices.service");
-const { notifyInvoicePaid } = require("./notifications.service");
+const {
+  notifyInvoicePaid,
+  notifyPaymentPendingConfirmation,
+} = require("./notifications.service");
 const {
   fetchEthIncomingTransactions,
   fetchTronCurrentBlockNumber,
@@ -162,6 +167,54 @@ async function confirmInvoice(payment, txData, source) {
   return result;
 }
 
+async function syncPendingConfirmation(payment, txData, source) {
+  const result = markPaymentPendingConfirmation({
+    invoiceId: payment.invoiceId,
+    currency: payment.currency,
+    txHash: txData.hash,
+    confirmations: txData.confirmations || 0,
+    paidAmountCrypto: txData.amount,
+  });
+
+  if (!result.changed) {
+    return result;
+  }
+
+  await notifyPaymentPendingConfirmation(result.invoice, payment.currency, {
+    txHash: txData.hash,
+    confirmations: txData.confirmations || 0,
+    requiredConfirmations: requiredConfirmationsForPayment(payment),
+    source,
+  });
+  return result;
+}
+
+function isHashUnavailableForPayment(payment, normalizedHash, usedHashes) {
+  const storedHash = normalizeHashForCurrency(payment.currency, normalizedHash, payment.txHash);
+  if (storedHash && storedHash === normalizedHash) {
+    return usedHashes.has(normalizedHash);
+  }
+  return usedHashes.has(normalizedHash) || isTxHashAlreadyUsed(normalizedHash);
+}
+
+function normalizeHashForCurrency(currency, fallbackHash, hash) {
+  const value = String(hash || "").trim();
+  if (!value) {
+    return null;
+  }
+  const normalizedCurrency = String(currency || "").toUpperCase();
+  if (normalizedCurrency === "BTC") {
+    return normalizeBtcTxHash(value);
+  }
+  if (normalizedCurrency === "USDT") {
+    return normalizeTronTxHash(value);
+  }
+  if (normalizedCurrency === "ETH") {
+    return normalizeEthTxHash(value);
+  }
+  return String(fallbackHash || value).trim().toLowerCase();
+}
+
 async function verifyEthPayments() {
   if (!config.providers.etherscan.apiKey) {
     return {
@@ -221,16 +274,10 @@ async function verifyEthPayments() {
       addRef(checkedPaymentRefs, payment.paymentShortId || payment.paymentId);
       const match = transactions.find((tx) => {
         const hash = normalizeEthTxHash(tx.hash);
-        if (!hash || usedHashes.has(hash) || isTxHashAlreadyUsed(hash)) {
+        if (!hash || isHashUnavailableForPayment(payment, hash, usedHashes)) {
           return false;
         }
         if (!isInInvoiceWindow(payment, tx.timestampMs)) {
-          return false;
-        }
-        if (
-          Number(tx.confirmations || 0) <
-          Number(config.providers.etherscan.minConfirmations || 0)
-        ) {
           return false;
         }
         return isAmountMatch(payment, tx.amount);
@@ -241,17 +288,21 @@ async function verifyEthPayments() {
       }
 
       try {
-        const confirmResult = await confirmInvoice(
-          payment,
-          {
-            hash: normalizeEthTxHash(match.hash),
-            amount: match.amount,
-            confirmations: match.confirmations,
-          },
-          "etherscan",
-        );
+        const normalizedHash = normalizeEthTxHash(match.hash);
+        const txData = {
+          hash: normalizedHash,
+          amount: match.amount,
+          confirmations: match.confirmations,
+        };
+        const requiredConfirmations = requiredConfirmationsForPayment(payment);
+        if (Number(match.confirmations || 0) < requiredConfirmations) {
+          await syncPendingConfirmation(payment, txData, "etherscan");
+          usedHashes.add(normalizedHash);
+          continue;
+        }
+
+        const confirmResult = await confirmInvoice(payment, txData, "etherscan");
         if (confirmResult.changed) {
-          const normalizedHash = normalizeEthTxHash(match.hash);
           usedHashes.add(normalizedHash);
           addRef(invoiceRefs, payment.invoiceShortId || payment.invoiceId);
           addRef(paymentRefs, payment.paymentShortId || payment.paymentId);
@@ -351,7 +402,7 @@ async function verifyTronUsdtPayments() {
       addRef(checkedPaymentRefs, payment.paymentShortId || payment.paymentId);
       const candidate = transfers.find((tx) => {
         const hash = normalizeTronTxHash(tx.hash);
-        if (!hash || usedHashes.has(hash) || isTxHashAlreadyUsed(hash)) {
+        if (!hash || isHashUnavailableForPayment(payment, hash, usedHashes)) {
           return false;
         }
         if (!isInInvoiceWindow(payment, tx.timestampMs)) {
@@ -374,21 +425,21 @@ async function verifyTronUsdtPayments() {
           currentBlock > 0 && txInfo.blockNumber > 0
             ? Math.max(currentBlock - txInfo.blockNumber + 1, 0)
             : 0;
-        if (confirmations < Number(config.providers.tron.minConfirmations || 0)) {
+        const normalizedHash = normalizeTronTxHash(candidate.hash);
+        const txData = {
+          hash: normalizedHash,
+          amount: candidate.amount,
+          confirmations,
+        };
+        const requiredConfirmations = requiredConfirmationsForPayment(payment);
+        if (confirmations < requiredConfirmations) {
+          await syncPendingConfirmation(payment, txData, "trongrid-usdt-trc20");
+          usedHashes.add(normalizedHash);
           continue;
         }
 
-        const confirmResult = await confirmInvoice(
-          payment,
-          {
-            hash: normalizeTronTxHash(candidate.hash),
-            amount: candidate.amount,
-            confirmations,
-          },
-          "trongrid-usdt-trc20",
-        );
+        const confirmResult = await confirmInvoice(payment, txData, "trongrid-usdt-trc20");
         if (confirmResult.changed) {
-          const normalizedHash = normalizeTronTxHash(candidate.hash);
           usedHashes.add(normalizedHash);
           addRef(invoiceRefs, payment.invoiceShortId || payment.invoiceId);
           addRef(paymentRefs, payment.paymentShortId || payment.paymentId);
@@ -478,16 +529,10 @@ async function verifyBtcPayments() {
       addRef(checkedPaymentRefs, payment.paymentShortId || payment.paymentId);
       const candidate = transactions.find((tx) => {
         const hash = normalizeBtcTxHash(tx.hash);
-        if (!hash || usedHashes.has(hash) || isTxHashAlreadyUsed(hash)) {
+        if (!hash || isHashUnavailableForPayment(payment, hash, usedHashes)) {
           return false;
         }
         if (!isInInvoiceWindow(payment, tx.timestampMs)) {
-          return false;
-        }
-        if (
-          Number(tx.confirmations || 0) <
-          Number(config.providers.btc.minConfirmations || 0)
-        ) {
           return false;
         }
         return isAmountMatch(payment, tx.amount);
@@ -498,17 +543,21 @@ async function verifyBtcPayments() {
       }
 
       try {
-        const confirmResult = await confirmInvoice(
-          payment,
-          {
-            hash: normalizeBtcTxHash(candidate.hash),
-            amount: candidate.amount,
-            confirmations: candidate.confirmations,
-          },
-          "blockstream-btc",
-        );
+        const normalizedHash = normalizeBtcTxHash(candidate.hash);
+        const txData = {
+          hash: normalizedHash,
+          amount: candidate.amount,
+          confirmations: candidate.confirmations,
+        };
+        const requiredConfirmations = requiredConfirmationsForPayment(payment);
+        if (Number(candidate.confirmations || 0) < requiredConfirmations) {
+          await syncPendingConfirmation(payment, txData, "blockstream-btc");
+          usedHashes.add(normalizedHash);
+          continue;
+        }
+
+        const confirmResult = await confirmInvoice(payment, txData, "blockstream-btc");
         if (confirmResult.changed) {
-          const normalizedHash = normalizeBtcTxHash(candidate.hash);
           usedHashes.add(normalizedHash);
           addRef(invoiceRefs, payment.invoiceShortId || payment.invoiceId);
           addRef(paymentRefs, payment.paymentShortId || payment.paymentId);
@@ -579,24 +628,31 @@ async function verifyPendingPayments() {
     const refsPayload = buildVerifierRefsPayload(summary.results);
     Object.assign(summary, refsPayload);
 
-    logEvent("system", "payment_verifier", "run", {
-      ranAt: summary.ranAt,
-      checked: summary.checked,
-      paid: summary.paid,
-      errors: summary.errors.slice(0, 25),
-      skipped: false,
-      autoVerifyEnabled: summary.autoVerifyEnabled,
-      invoiceShortId: summary.invoiceShortId,
-      paymentShortId: summary.paymentShortId,
-      txHash: summary.txHash,
-      invoiceShortIds: summary.invoiceShortIds,
-      paymentShortIds: summary.paymentShortIds,
-      txHashes: summary.txHashes,
-      matchedInvoiceShortIds: summary.matchedInvoiceShortIds,
-      matchedPaymentShortIds: summary.matchedPaymentShortIds,
-      checkedInvoiceShortIds: summary.checkedInvoiceShortIds,
-      checkedPaymentShortIds: summary.checkedPaymentShortIds,
-    });
+    const hasUsefulRunData =
+      Number(summary.checked || 0) > 0 ||
+      Number(summary.paid || 0) > 0 ||
+      (Array.isArray(summary.errors) && summary.errors.length > 0);
+
+    if (hasUsefulRunData) {
+      logEvent("system", "payment_verifier", "run", {
+        ranAt: summary.ranAt,
+        checked: summary.checked,
+        paid: summary.paid,
+        errors: summary.errors.slice(0, 25),
+        skipped: false,
+        autoVerifyEnabled: summary.autoVerifyEnabled,
+        invoiceShortId: summary.invoiceShortId,
+        paymentShortId: summary.paymentShortId,
+        txHash: summary.txHash,
+        invoiceShortIds: summary.invoiceShortIds,
+        paymentShortIds: summary.paymentShortIds,
+        txHashes: summary.txHashes,
+        matchedInvoiceShortIds: summary.matchedInvoiceShortIds,
+        matchedPaymentShortIds: summary.matchedPaymentShortIds,
+        checkedInvoiceShortIds: summary.checkedInvoiceShortIds,
+        checkedPaymentShortIds: summary.checkedPaymentShortIds,
+      });
+    }
 
     return summary;
   } finally {

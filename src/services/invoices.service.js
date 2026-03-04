@@ -135,6 +135,34 @@ function roundTo(value, decimals) {
   return Math.round(value * factor) / factor;
 }
 
+function paymentLateGraceMs() {
+  return Math.max(0, Number(config.paymentLateGraceMinutes || 0)) * 60 * 1000;
+}
+
+function computeInvoiceHardExpiryMs(expiresAt) {
+  return new Date(expiresAt).getTime() + paymentLateGraceMs();
+}
+
+function computeInvoiceTtlMinutes(currencies) {
+  const baseMinutes = Math.max(1, Number(config.invoiceTtlMinutes || 30));
+  const normalized = (currencies || []).map((currency) => String(currency || "").toUpperCase());
+  if (!normalized.includes("BTC")) {
+    return baseMinutes;
+  }
+  return Math.max(
+    baseMinutes,
+    Math.ceil(baseMinutes * Math.max(1, Number(config.btcInvoiceTtlMultiplier || 1))),
+  );
+}
+
+function amountsEquivalent(currency, left, right) {
+  if (left === null || left === undefined || right === null || right === undefined) {
+    return left === right;
+  }
+  const decimals = currencyDecimals(currency);
+  return roundTo(Number(left), decimals) === roundTo(Number(right), decimals);
+}
+
 function getWalletAddress(currency) {
   const address = config.walletAddresses[currency];
   if (!address) {
@@ -165,6 +193,32 @@ function isValidEthTxHash(value) {
 
 function isValidHex64(value) {
   return /^[a-fA-F0-9]{64}$/.test(String(value || "").trim());
+}
+
+function requiredConfirmationsForPayment({ currency, network }) {
+  const normalizedCurrency = String(currency || "").toUpperCase();
+  const normalizedNetwork = String(network || "").toUpperCase();
+
+  if (normalizedCurrency === "BTC" || normalizedNetwork.includes("BTC")) {
+    return Math.max(0, Number(config.providers?.btc?.minConfirmations || 0));
+  }
+
+  if (
+    normalizedCurrency === "USDT" &&
+    (normalizedNetwork.includes("TRC20") || normalizedNetwork.includes("TRON"))
+  ) {
+    return Math.max(0, Number(config.providers?.tron?.minConfirmations || 0));
+  }
+
+  if (
+    normalizedCurrency === "ETH" ||
+    normalizedNetwork.includes("ETH") ||
+    normalizedNetwork.includes("ERC20")
+  ) {
+    return Math.max(0, Number(config.providers?.etherscan?.minConfirmations || 0));
+  }
+
+  return 0;
 }
 
 function assertTxHashValidForPayment({ currency, network, txHash }) {
@@ -226,8 +280,7 @@ function reserveUniqueExpectedAmount({ currency, walletAddress, baseAmount }) {
   const decimals = currencyDecimals(currency);
   const step = 1 / 10 ** decimals;
   const maxBumps = Math.max(1, Number(config.uniqueAmountMaxBumps || 2000));
-  const graceMs = Math.max(0, Number(config.paymentLateGraceMinutes || 0)) * 60 * 1000;
-  const cutoffIso = new Date(Date.now() - graceMs).toISOString();
+  const cutoffIso = new Date(Date.now() - paymentLateGraceMs()).toISOString();
 
   const rows = db
     .prepare(
@@ -274,7 +327,7 @@ function toInvoiceDto(row, paymentRows) {
   }
 
   const invoiceExpired =
-    new Date(row.expires_at).getTime() <= Date.now() || row.status === "expired";
+    row.status === "expired" || computeInvoiceHardExpiryMs(row.expires_at) <= Date.now();
   const computedStatus = row.status === "pending" && invoiceExpired ? "expired" : row.status;
 
   const invoice = {
@@ -325,7 +378,7 @@ function isInvoiceExpired(invoice) {
   if (!invoice) {
     return false;
   }
-  return Boolean(invoice.expired || new Date(invoice.expiresAt).getTime() <= Date.now());
+  return Boolean(invoice.expired || computeInvoiceHardExpiryMs(invoice.expiresAt) <= Date.now());
 }
 
 function getInvoiceWithPaymentsById(id) {
@@ -444,7 +497,8 @@ async function createInvoice({
   const ratesUsd = await fetchRatesUsd();
 
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + config.invoiceTtlMinutes * 60 * 1000);
+  const ttlMinutes = computeInvoiceTtlMinutes(currencies);
+  const expiresAt = new Date(now.getTime() + ttlMinutes * 60 * 1000);
   const invoiceId = crypto.randomUUID();
   const invoiceShortId = allocateInvoiceShortId();
   const token = randomToken(24);
@@ -556,6 +610,7 @@ async function createInvoice({
     invoiceShortId,
     amountUsd: parsedAmount,
     currencies,
+    ttlMinutes,
     telegramUserId: telegramUserId ? String(telegramUserId) : null,
   });
 
@@ -754,8 +809,7 @@ function deleteInvoiceByRef(invoiceRef, deletedBy = "admin") {
 
 function expireDueInvoices() {
   const now = nowIso();
-  const graceMs = Math.max(0, Number(config.paymentLateGraceMinutes || 0)) * 60 * 1000;
-  const cutoffIso = new Date(Date.now() - graceMs).toISOString();
+  const cutoffIso = new Date(Date.now() - paymentLateGraceMs()).toISOString();
   const overdueRows = db
     .prepare(
       `
@@ -831,8 +885,7 @@ function markInvoicePaid({
     };
   }
 
-  const graceMs = Math.max(0, Number(config.paymentLateGraceMinutes || 0)) * 60 * 1000;
-  const hardExpiryMs = new Date(invoiceRow.expires_at).getTime() + graceMs;
+  const hardExpiryMs = computeInvoiceHardExpiryMs(invoiceRow.expires_at);
   if (Date.now() > hardExpiryMs) {
     return {
       invoice,
@@ -951,6 +1004,151 @@ function markInvoicePaid({
     invoice: getInvoiceWithPaymentsById(invoiceId),
     changed: true,
     reason: "paid",
+  };
+}
+
+function markPaymentPendingConfirmation({
+  invoiceId,
+  currency,
+  txHash,
+  confirmations = 0,
+  paidAmountCrypto = null,
+}) {
+  const normalizedCurrency = String(currency || "").toUpperCase();
+  const normalizedTxHash = txHash ? String(txHash).trim().toLowerCase() : null;
+  if (!normalizedTxHash) {
+    throw new Error("Tx hash obbligatorio per stato pending_confirmation");
+  }
+
+  const invoiceRow = db
+    .prepare(
+      `
+        SELECT id, status, expires_at
+        FROM invoices
+        WHERE id = ?
+      `,
+    )
+    .get(invoiceId);
+  if (!invoiceRow) {
+    throw new Error("Fattura non trovata");
+  }
+
+  const invoice = getInvoiceWithPaymentsById(invoiceId);
+  if (invoiceRow.status !== "pending") {
+    return {
+      invoice,
+      changed: false,
+      reason: "invoice_not_pending",
+    };
+  }
+
+  const hardExpiryMs = computeInvoiceHardExpiryMs(invoiceRow.expires_at);
+  if (Date.now() > hardExpiryMs) {
+    return {
+      invoice,
+      changed: false,
+      reason: "invoice_expired",
+    };
+  }
+
+  const targetPayment = invoice.payments.find(
+    (payment) => payment.currency === normalizedCurrency,
+  );
+  if (!targetPayment) {
+    throw new Error("Valuta pagamento non valida per questa fattura");
+  }
+
+  assertTxHashValidForPayment({
+    currency: targetPayment.currency,
+    network: targetPayment.network,
+    txHash: normalizedTxHash,
+  });
+
+  const normalizedPaidAmount =
+    paidAmountCrypto !== null && paidAmountCrypto !== undefined
+      ? Number(paidAmountCrypto)
+      : null;
+  if (
+    normalizedPaidAmount !== null &&
+    (!Number.isFinite(normalizedPaidAmount) || normalizedPaidAmount <= 0)
+  ) {
+    throw new Error("Importo pagato non valido");
+  }
+
+  const alreadySameStatus =
+    targetPayment.status === "pending_confirmation" &&
+    String(targetPayment.txHash || "").trim().toLowerCase() === normalizedTxHash &&
+    Number(targetPayment.confirmations || 0) === Math.max(0, Number(confirmations || 0)) &&
+    amountsEquivalent(targetPayment.currency, targetPayment.paidAmountCrypto, normalizedPaidAmount);
+  if (alreadySameStatus) {
+    return {
+      invoice,
+      changed: false,
+      reason: "already_pending_confirmation",
+    };
+  }
+
+  const now = nowIso();
+  const nextConfirmations = Math.max(0, Number(confirmations || 0));
+  const tx = db.transaction(() => {
+    db.prepare(
+      `
+        UPDATE payments
+        SET status = 'pending_confirmation',
+            paid_amount_crypto = COALESCE(?, paid_amount_crypto),
+            tx_hash = ?,
+            confirmations = ?,
+            updated_at = ?
+        WHERE id = ?
+      `,
+    ).run(
+      normalizedPaidAmount,
+      normalizedTxHash,
+      nextConfirmations,
+      now,
+      targetPayment.id,
+    );
+
+    db.prepare(
+      `
+        UPDATE invoices
+        SET updated_at = ?
+        WHERE id = ?
+      `,
+    ).run(now, invoiceId);
+  });
+
+  try {
+    tx();
+  } catch (error) {
+    const message = String(error.message || "");
+    if (
+      message.includes("idx_payments_tx_hash_unique") ||
+      message.includes("UNIQUE constraint failed: payments.tx_hash")
+    ) {
+      return {
+        invoice: getInvoiceWithPaymentsById(invoiceId),
+        changed: false,
+        reason: "tx_hash_already_used",
+      };
+    }
+    throw error;
+  }
+
+  logEvent("payment", targetPayment.id, "pending_confirmation", {
+    paymentShortId: targetPayment.shortId,
+    invoiceId,
+    invoiceShortId: invoice.shortId,
+    currency: normalizedCurrency,
+    txHash: normalizedTxHash,
+    confirmations: nextConfirmations,
+    paidAmountCrypto: normalizedPaidAmount,
+  });
+
+  return {
+    invoice: getInvoiceWithPaymentsById(invoiceId),
+    changed: true,
+    reason: "pending_confirmation",
   };
 }
 
@@ -1613,6 +1811,314 @@ function createRiskSummary(alerts, displayed) {
   return summary;
 }
 
+function sanitizeRiskAlertForHistory(alert) {
+  const details =
+    alert?.details && typeof alert.details === "object"
+      ? JSON.parse(JSON.stringify(alert.details))
+      : {};
+  return {
+    code: String(alert?.code || "UNKNOWN"),
+    severity: String(alert?.severity || "medium").toLowerCase(),
+    title: String(alert?.title || alert?.code || "Avviso"),
+    description: String(alert?.description || ""),
+    entityType: String(alert?.entityType || "system"),
+    entityRef: alert?.entityRef || null,
+    invoiceRef: alert?.invoiceRef || null,
+    txRef: alert?.txRef || null,
+    txHash: alert?.txHash || null,
+    updatedAt: alert?.updatedAt || nowIso(),
+    details,
+  };
+}
+
+function buildRiskMonitorFingerprint(monitor) {
+  const summary = monitor?.summary || {};
+  const alerts = Array.isArray(monitor?.alerts) ? monitor.alerts : [];
+  return JSON.stringify({
+    total: Number(summary.total || 0),
+    critical: Number(summary.critical || 0),
+    high: Number(summary.high || 0),
+    medium: Number(summary.medium || 0),
+    byCode: Object.entries(summary.byCode || {}).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    alerts: alerts.map((alert) => [
+      String(alert.code || "UNKNOWN"),
+      String(alert.severity || "medium").toLowerCase(),
+      String(alert.entityType || "system"),
+      String(alert.entityRef || ""),
+      String(alert.invoiceRef || ""),
+      String(alert.txRef || ""),
+      String(alert.txHash || ""),
+      String(alert.updatedAt || ""),
+    ]),
+  });
+}
+
+function buildRiskAlertFingerprint(alert) {
+  const safe = sanitizeRiskAlertForHistory(alert);
+  return [
+    safe.code,
+    safe.severity,
+    safe.entityType,
+    String(safe.entityRef || ""),
+    String(safe.invoiceRef || ""),
+    String(safe.txRef || ""),
+    String(safe.txHash || "").toLowerCase(),
+  ].join("|");
+}
+
+function indexRiskAlertsByFingerprint(alerts) {
+  const map = new Map();
+  for (const alert of alerts || []) {
+    const safe = sanitizeRiskAlertForHistory(alert);
+    map.set(buildRiskAlertFingerprint(safe), safe);
+  }
+  return map;
+}
+
+function recordRiskAlertLifecycleEvents(previousAlerts, currentAlerts, source) {
+  const previousMap = indexRiskAlertsByFingerprint(previousAlerts);
+  const currentMap = indexRiskAlertsByFingerprint(currentAlerts);
+
+  for (const [fingerprint, alert] of currentMap.entries()) {
+    if (previousMap.has(fingerprint)) {
+      continue;
+    }
+    logEvent("risk", fingerprint, "alert_opened", {
+      source,
+      fingerprint,
+      state: "active",
+      ...alert,
+    });
+  }
+
+  for (const [fingerprint, alert] of previousMap.entries()) {
+    if (currentMap.has(fingerprint)) {
+      continue;
+    }
+    logEvent("risk", fingerprint, "alert_resolved", {
+      source,
+      fingerprint,
+      state: "resolved",
+      ...alert,
+    });
+  }
+}
+
+function latestRiskMonitorSnapshotEvent() {
+  const row = db
+    .prepare(
+      `
+        SELECT id, action, payload, created_at
+        FROM events
+        WHERE entity_type = 'system'
+          AND entity_id = 'risk_monitor'
+          AND action IN ('snapshot', 'snapshot_clear')
+        ORDER BY id DESC
+        LIMIT 1
+      `,
+    )
+    .get();
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: Number(row.id),
+    action: row.action,
+    payload: fromJson(row.payload, {}),
+    createdAt: row.created_at,
+  };
+}
+
+function recordRiskMonitorSnapshot(monitor, options = {}) {
+  if (!monitor || !monitor.summary) {
+    return {
+      logged: false,
+      reason: "monitor_missing",
+    };
+  }
+
+  const source = String(options.source || "system").trim() || "system";
+  const summary = monitor.summary || {};
+  const alerts = (monitor.alerts || []).map(sanitizeRiskAlertForHistory);
+  const fingerprint = buildRiskMonitorFingerprint(monitor);
+  const hasAlerts = Number(summary.total || 0) > 0;
+  const currentState = hasAlerts ? "active" : "clear";
+  const previous = latestRiskMonitorSnapshotEvent();
+  const previousPayload = previous?.payload && typeof previous.payload === "object" ? previous.payload : {};
+  const previousFingerprint = String(previousPayload.fingerprint || "");
+  const previousState = String(previousPayload.state || "").trim().toLowerCase();
+  const shouldLog =
+    !previous ||
+    (hasAlerts && (previousFingerprint !== fingerprint || previousState !== "active")) ||
+    (!hasAlerts && previousState === "active");
+
+  if (!shouldLog) {
+    return {
+      logged: false,
+      reason: "unchanged",
+      fingerprint,
+      state: currentState,
+    };
+  }
+
+  const action = hasAlerts ? "snapshot" : "snapshot_clear";
+  const previousAlerts =
+    Array.isArray(previousPayload.alerts) && previousPayload.alerts.length
+      ? previousPayload.alerts.map(sanitizeRiskAlertForHistory)
+      : [];
+  const payload = {
+    source,
+    state: currentState,
+    generatedAt: monitor.generatedAt || nowIso(),
+    fingerprint,
+    summary: {
+      total: Number(summary.total || 0),
+      displayed: Number(summary.displayed || 0),
+      critical: Number(summary.critical || 0),
+      high: Number(summary.high || 0),
+      medium: Number(summary.medium || 0),
+      byCode: summary.byCode || {},
+    },
+    alerts: alerts.slice(0, 24),
+  };
+
+  recordRiskAlertLifecycleEvents(previousAlerts, alerts, source);
+  logEvent("system", "risk_monitor", action, payload);
+
+  return {
+    logged: true,
+    action,
+    state: currentState,
+    fingerprint,
+    payload,
+  };
+}
+
+function listRiskMonitorHistory(limit = 60) {
+  const max = Math.max(1, Math.min(300, Number(limit || 60)));
+  const rows = db
+    .prepare(
+      `
+        SELECT id, action, payload, created_at
+        FROM events
+        WHERE entity_type = 'system'
+          AND entity_id = 'risk_monitor'
+          AND action IN ('snapshot', 'snapshot_clear')
+        ORDER BY id DESC
+        LIMIT ?
+      `,
+    )
+    .all(max);
+
+  return rows.map((row) => {
+    const payload = fromJson(row.payload, {}) || {};
+    const alerts = Array.isArray(payload.alerts) ? payload.alerts.map(sanitizeRiskAlertForHistory) : [];
+    const summary = payload.summary && typeof payload.summary === "object" ? payload.summary : {};
+    const state = String(payload.state || (row.action === "snapshot" ? "active" : "clear"))
+      .trim()
+      .toLowerCase();
+
+    return {
+      id: Number(row.id),
+      action: row.action,
+      state,
+      source: String(payload.source || "system"),
+      createdAt: row.created_at,
+      generatedAt: payload.generatedAt || row.created_at,
+      fingerprint: String(payload.fingerprint || ""),
+      summary: {
+        total: Number(summary.total || 0),
+        displayed: Number(summary.displayed || 0),
+        critical: Number(summary.critical || 0),
+        high: Number(summary.high || 0),
+        medium: Number(summary.medium || 0),
+        byCode: summary.byCode || {},
+      },
+      alerts,
+    };
+  });
+}
+
+function listRiskAlertEvents({
+  limit = 120,
+  severity = "all",
+  code = "",
+  source = "",
+  state = "all",
+} = {}) {
+  const max = Math.max(1, Math.min(500, Number(limit || 120)));
+  const scanLimit = Math.max(max * 8, 240);
+  const rows = db
+    .prepare(
+      `
+        SELECT id, entity_id, action, payload, created_at
+        FROM events
+        WHERE entity_type = 'risk'
+          AND action IN ('alert_opened', 'alert_resolved')
+        ORDER BY id DESC
+        LIMIT ?
+      `,
+    )
+    .all(scanLimit);
+
+  const severityFilter = String(severity || "all").trim().toLowerCase();
+  const codeFilter = String(code || "").trim().toLowerCase();
+  const sourceFilter = String(source || "").trim().toLowerCase();
+  const stateFilter = String(state || "all").trim().toLowerCase();
+
+  const items = [];
+  for (const row of rows) {
+    const payload = fromJson(row.payload, {}) || {};
+    const alert = sanitizeRiskAlertForHistory(payload);
+    const sourceValue = String(payload.source || "system");
+    const actionState = String(payload.state || (row.action === "alert_opened" ? "active" : "resolved"))
+      .trim()
+      .toLowerCase();
+
+    if (severityFilter !== "all" && alert.severity !== severityFilter) {
+      continue;
+    }
+    if (stateFilter !== "all" && actionState !== stateFilter) {
+      continue;
+    }
+    if (codeFilter && !alert.code.toLowerCase().includes(codeFilter)) {
+      continue;
+    }
+    if (sourceFilter && !sourceValue.toLowerCase().includes(sourceFilter)) {
+      continue;
+    }
+
+    items.push({
+      id: Number(row.id),
+      fingerprint: String(payload.fingerprint || row.entity_id || ""),
+      action: row.action,
+      state: actionState,
+      source: sourceValue,
+      createdAt: row.created_at,
+      code: alert.code,
+      severity: alert.severity,
+      title: alert.title,
+      description: alert.description,
+      entityType: alert.entityType,
+      entityRef: alert.entityRef,
+      invoiceRef: alert.invoiceRef,
+      txRef: alert.txRef,
+      txHash: alert.txHash,
+      updatedAt: alert.updatedAt,
+      details: alert.details || {},
+      payload,
+    });
+
+    if (items.length >= max) {
+      break;
+    }
+  }
+
+  return items;
+}
+
 function getRiskMonitor({ limit = 80 } = {}) {
   const max = Math.max(10, Math.min(300, Number(limit || 80)));
   const now = new Date();
@@ -1637,6 +2143,7 @@ function getRiskMonitor({ limit = 80 } = {}) {
     });
   };
 
+  const overdueCutoffIso = new Date(nowMs - paymentLateGraceMs()).toISOString();
   const overduePendingRows = db
     .prepare(
       `
@@ -1648,12 +2155,12 @@ function getRiskMonitor({ limit = 80 } = {}) {
         LIMIT ?
       `,
     )
-    .all(nowIsoValue, reviewLimit);
+    .all(overdueCutoffIso, reviewLimit);
 
   for (const row of overduePendingRows) {
     const overdueMinutes = Math.max(
       1,
-      Math.floor((nowMs - new Date(row.expires_at).getTime()) / 60000),
+      Math.floor((nowMs - computeInvoiceHardExpiryMs(row.expires_at)) / 60000),
     );
     pushAlert({
       code: "INVOICE_PENDING_OVERDUE",
@@ -1989,11 +2496,6 @@ function getRiskMonitor({ limit = 80 } = {}) {
     });
   }
 
-  const awaitingStaleMinutes = Math.max(
-    20,
-    Math.floor(Number(config.invoiceTtlMinutes || 30) * 0.75),
-  );
-  const awaitingCutoffIso = new Date(nowMs - awaitingStaleMinutes * 60 * 1000).toISOString();
   const staleAwaitingRows = db
     .prepare(
       `
@@ -2004,23 +2506,36 @@ function getRiskMonitor({ limit = 80 } = {}) {
           p.updated_at,
           p.created_at,
           p.invoice_id,
+          i.created_at AS invoice_created_at,
+          i.expires_at AS invoice_expires_at,
           i.short_id AS invoice_short_id
         FROM payments p
         INNER JOIN invoices i ON i.id = p.invoice_id
         WHERE p.status = 'awaiting_payment'
           AND i.status = 'pending'
-          AND p.updated_at <= ?
         ORDER BY p.updated_at ASC
         LIMIT ?
       `,
     )
-    .all(awaitingCutoffIso, reviewLimit);
+    .all(reviewLimit);
 
   for (const row of staleAwaitingRows) {
+    const invoiceTtlMinutes = Math.max(
+      1,
+      Math.round(
+        (new Date(row.invoice_expires_at).getTime() -
+          new Date(row.invoice_created_at).getTime()) /
+          60000,
+      ),
+    );
+    const awaitingStaleMinutes = Math.max(20, Math.floor(invoiceTtlMinutes * 0.75));
     const staleMinutes = Math.max(
       1,
       Math.floor((nowMs - new Date(row.updated_at || row.created_at).getTime()) / 60000),
     );
+    if (staleMinutes < awaitingStaleMinutes) {
+      continue;
+    }
     pushAlert({
       code: "PAYMENT_AWAITING_STALE",
       severity: staleMinutes >= 60 ? "high" : "medium",
@@ -2034,18 +2549,13 @@ function getRiskMonitor({ limit = 80 } = {}) {
       updatedAt: row.updated_at || row.created_at,
       details: {
         currency: row.currency,
+        invoiceTtlMinutes,
+        alertThresholdMinutes: awaitingStaleMinutes,
         staleMinutes,
       },
     });
   }
 
-  const pendingConfStaleMinutes = Math.max(
-    15,
-    Number(config.providers?.btc?.minConfirmations || 0) * 8,
-  );
-  const pendingConfCutoffIso = new Date(
-    nowMs - pendingConfStaleMinutes * 60 * 1000,
-  ).toISOString();
   const stalePendingConfRows = db
     .prepare(
       `
@@ -2062,18 +2572,25 @@ function getRiskMonitor({ limit = 80 } = {}) {
         FROM payments p
         INNER JOIN invoices i ON i.id = p.invoice_id
         WHERE p.status = 'pending_confirmation'
-          AND p.updated_at <= ?
         ORDER BY p.updated_at ASC
         LIMIT ?
       `,
     )
-    .all(pendingConfCutoffIso, reviewLimit);
+    .all(reviewLimit);
 
   for (const row of stalePendingConfRows) {
+    const requiredConfirmations = requiredConfirmationsForPayment({
+      currency: row.currency,
+      network: row.network,
+    });
+    const pendingConfStaleMinutes = Math.max(15, requiredConfirmations * 8);
     const staleMinutes = Math.max(
       1,
       Math.floor((nowMs - new Date(row.updated_at).getTime()) / 60000),
     );
+    if (staleMinutes < pendingConfStaleMinutes) {
+      continue;
+    }
     pushAlert({
       code: "PAYMENT_PENDING_CONFIRMATION_STALE",
       severity: staleMinutes >= 45 ? "high" : "medium",
@@ -2090,6 +2607,8 @@ function getRiskMonitor({ limit = 80 } = {}) {
         currency: row.currency,
         network: row.network,
         confirmations: Number(row.confirmations || 0),
+        requiredConfirmations,
+        alertThresholdMinutes: pendingConfStaleMinutes,
         staleMinutes,
       },
     });
@@ -2121,8 +2640,7 @@ function listPendingPaymentsForCurrencies(currencies) {
   }
 
   const now = Date.now();
-  const graceMs = Math.max(0, Number(config.paymentLateGraceMinutes || 0)) * 60 * 1000;
-  const cutoffIso = new Date(now - graceMs).toISOString();
+  const cutoffIso = new Date(now - paymentLateGraceMs()).toISOString();
   const currencyPlaceholders = normalized.map(() => "?").join(", ");
   const openInvoicePlaceholders = OPEN_INVOICE_STATUSES.map(() => "?").join(", ");
   const openPaymentPlaceholders = OPEN_PAYMENT_STATUSES.map(() => "?").join(", ");
@@ -2144,6 +2662,10 @@ function listPendingPaymentsForCurrencies(currencies) {
           p.network,
           p.wallet_address,
           p.expected_amount_crypto,
+          p.paid_amount_crypto,
+          p.tx_hash,
+          p.confirmations,
+          p.status,
           p.created_at AS payment_created_at
         FROM invoices i
         INNER JOIN payments p ON p.invoice_id = i.id
@@ -2175,6 +2697,13 @@ function listPendingPaymentsForCurrencies(currencies) {
     network: row.network,
     walletAddress: row.wallet_address,
     expectedAmountCrypto: Number(row.expected_amount_crypto),
+    paidAmountCrypto:
+      row.paid_amount_crypto !== null && row.paid_amount_crypto !== undefined
+        ? Number(row.paid_amount_crypto)
+        : null,
+    txHash: row.tx_hash || null,
+    confirmations: Number(row.confirmations || 0),
+    paymentStatus: row.status,
     paymentCreatedAt: row.payment_created_at,
   }));
 }
@@ -2205,6 +2734,9 @@ module.exports = {
   listInvoices,
   getDashboardMetrics,
   getRiskMonitor,
+  recordRiskMonitorSnapshot,
+  listRiskMonitorHistory,
+  listRiskAlertEvents,
   getInvoiceWithPaymentsById,
   getInvoiceWithPaymentsByToken,
   getInvoiceStatusById,
@@ -2217,11 +2749,13 @@ module.exports = {
   resolveInvoiceIdByRef,
   resolvePaymentIdByRef,
   markInvoicePaid,
+  markPaymentPendingConfirmation,
   deleteAllInvoices,
   deleteInvoiceByRef,
   expireDueInvoices,
   normalizeCurrencies,
   listPendingPaymentsForCurrencies,
   isTxHashAlreadyUsed,
+  requiredConfirmationsForPayment,
   isInvoiceExpired,
 };

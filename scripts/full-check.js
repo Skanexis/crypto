@@ -584,13 +584,20 @@ async function run() {
 
     logStep(step++, "Risk monitor and verify-now endpoints");
     {
-      const risk = await request("/api/admin/risk-monitor?limit=120", { auth: true });
+      const risk = await request("/api/admin/risk-monitor?limit=120&history_limit=20&persist=1&source=full-check", {
+        auth: true,
+      });
       assertEq(risk.status, 200, "risk monitor status");
       assert(risk.json.riskMonitor, "risk monitor payload missing");
       assert(
         typeof risk.json.riskMonitor.summary.total === "number",
         "risk monitor summary.total is not numeric",
       );
+      assert(Array.isArray(risk.json.history), "risk monitor history missing");
+      assert(Array.isArray(risk.json.alertHistory), "risk alert history missing");
+      if (Number(risk.json.riskMonitor.summary.total || 0) > 0) {
+        assert(risk.json.history.length >= 1, "risk monitor history should store at least one snapshot");
+      }
 
       const verifyNow = await request("/api/payments/verify-now", {
         method: "POST",

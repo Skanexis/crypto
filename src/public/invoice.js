@@ -189,12 +189,38 @@ function renderWalletCards(payments, invoiceStatus) {
     })
     .join("");
 
-  const disabled = String(invoiceStatus || "").toLowerCase() !== "pending";
+  const hasTrackedPayment = (payments || []).some((payment) =>
+    ["pending_confirmation", "confirmed"].includes(String(payment.status || "").toLowerCase()),
+  );
+  const disabled = String(invoiceStatus || "").toLowerCase() !== "pending" || hasTrackedPayment;
   if (disabled) {
     [...els.walletCards.querySelectorAll("button")].forEach((button) => {
       button.disabled = true;
     });
   }
+}
+
+function applyPaymentProgressHint(invoice) {
+  const trackedPayment = (invoice.payments || []).find(
+    (payment) => String(payment.status || "").toLowerCase() === "pending_confirmation",
+  );
+  if (!trackedPayment) {
+    return false;
+  }
+
+  const confirmations = Number(trackedPayment.confirmations || 0);
+  els.statusHintBadge.className = "status-badge pending_confirmation";
+  els.statusHintBadge.textContent = localizeStatus("pending_confirmation");
+  els.statusHint.className = "notice ok";
+  els.statusHint.textContent =
+    `Pagamento ${trackedPayment.currency} rilevato sulla rete. Attendere le conferme blockchain (${confirmations}).`;
+
+  const txLine = trackedPayment.txHash ? `\nHash tx: ${trackedPayment.txHash}` : "";
+  els.finalMessage.className = "notice";
+  els.finalMessage.textContent =
+    `Transazione registrata. Non inviare un secondo pagamento.${txLine}`;
+  els.finalMessage.classList.remove("hidden");
+  return true;
 }
 
 function applyInvoice(invoice) {
@@ -219,6 +245,10 @@ function applyInvoice(invoice) {
     els.finalMessage.textContent =
       `Pagamento ricevuto e confermato. Puoi chiudere la pagina.${txLine}`;
     els.finalMessage.classList.remove("hidden");
+    return;
+  }
+
+  if (applyPaymentProgressHint(invoice)) {
     return;
   }
 

@@ -3,7 +3,11 @@ const http = require("http");
 const https = require("https");
 const app = require("./app");
 const config = require("./config");
-const { expireDueInvoices, getRiskMonitor } = require("./services/invoices.service");
+const {
+  expireDueInvoices,
+  getRiskMonitor,
+  recordRiskMonitorSnapshot,
+} = require("./services/invoices.service");
 const { runPaymentVerifierJob } = require("./services/payment-verifier.service");
 const {
   notifyVerifierSummary,
@@ -60,13 +64,22 @@ setInterval(async () => {
 
 setInterval(async () => {
   try {
-    if (!config.riskAlertsEnabled) {
-      return;
-    }
     const monitor = getRiskMonitor({ limit: 100 });
-    await notifyRiskMonitorSummary(monitor, {
+    const snapshot = recordRiskMonitorSnapshot(monitor, {
       source: "job-risk",
     });
+    if (snapshot?.logged) {
+      console.log(
+        `[jobs] risk snapshot saved state=${snapshot.state} total=${Number(
+          monitor?.summary?.total || 0,
+        )}`,
+      );
+    }
+    if (config.riskAlertsEnabled) {
+      await notifyRiskMonitorSummary(monitor, {
+        source: "job-risk",
+      });
+    }
   } catch (error) {
     console.error("[jobs] errore monitor rischi:", error.message);
   }

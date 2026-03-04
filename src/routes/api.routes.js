@@ -9,6 +9,9 @@ const {
   listInvoices,
   getDashboardMetrics,
   getRiskMonitor,
+  recordRiskMonitorSnapshot,
+  listRiskMonitorHistory,
+  listRiskAlertEvents,
   getInvoiceStatusByRef,
   getInvoiceWithPaymentsByToken,
   getInvoiceWithPaymentsById,
@@ -41,6 +44,10 @@ const router = express.Router();
 
 const publicRateLimit = createRateLimit({ windowMs: 60 * 1000, max: 120 });
 const webhookRateLimit = createRateLimit({ windowMs: 60 * 1000, max: 300 });
+
+function queryFlag(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
 
 function paymentQrText(payment) {
   if (payment.currency === "BTC") {
@@ -208,8 +215,24 @@ router.get("/admin/risk-monitor", requireAdminApiKey, (req, res, next) => {
     const riskMonitor = getRiskMonitor({
       limit: Number(req.query.limit || 120),
     });
+    const snapshot = queryFlag(req.query.persist)
+      ? recordRiskMonitorSnapshot(riskMonitor, {
+          source: String(req.query.source || "manual-api"),
+        })
+      : null;
+    const history = listRiskMonitorHistory(Number(req.query.history_limit || 40));
+    const alertHistory = listRiskAlertEvents({
+      limit: Number(req.query.alert_limit || 120),
+      severity: req.query.severity || "all",
+      code: req.query.code || "",
+      source: req.query.alert_source || "",
+      state: req.query.state || "all",
+    });
     res.json({
       riskMonitor,
+      history,
+      alertHistory,
+      snapshot,
     });
   } catch (error) {
     next(error);

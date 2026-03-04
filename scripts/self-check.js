@@ -19,6 +19,8 @@ process.env.ETH_WALLET_ADDRESS =
 process.env.USDT_NETWORK = process.env.USDT_NETWORK || "TRC20";
 process.env.PAYMENT_WEBHOOK_HMAC_SECRET =
   process.env.PAYMENT_WEBHOOK_HMAC_SECRET || "self-check-secret";
+process.env.BTC_INVOICE_TTL_MULTIPLIER =
+  process.env.BTC_INVOICE_TTL_MULTIPLIER || "2";
 process.env.STATIC_RATES_USD_JSON =
   process.env.STATIC_RATES_USD_JSON ||
   JSON.stringify({
@@ -32,6 +34,7 @@ const {
   createInvoice,
   deleteAllInvoices,
   markInvoicePaid,
+  markPaymentPendingConfirmation,
 } = require("../src/services/invoices.service");
 const { processPaymentWebhook, isValidWebhookSignature } = require("../src/services/payments.service");
 
@@ -65,6 +68,61 @@ async function run() {
   const btcB = invB.payments.find((p) => p.currency === "BTC").expectedAmountCrypto;
   assert(amountA !== amountB, "Expected unique ETH amounts for two open invoices");
   assert(btcA !== btcB, "Expected unique BTC amounts for two open invoices");
+
+  const invBaseTtl = await createInvoice({
+    amountUsd: 33,
+    allowedCurrencies: ["ETH"],
+    telegramUserId: null,
+    createdByAdminId: "self-check",
+  });
+  const ttlWithBtcMinutes = Math.round(
+    (new Date(invA.expiresAt).getTime() - new Date(invA.createdAt).getTime()) / 60000,
+  );
+  const ttlWithoutBtcMinutes = Math.round(
+    (new Date(invBaseTtl.expiresAt).getTime() - new Date(invBaseTtl.createdAt).getTime()) / 60000,
+  );
+  assert(ttlWithoutBtcMinutes >= 30, "Expected base invoice TTL to be at least 30 minutes");
+  assert(
+    ttlWithBtcMinutes >= ttlWithoutBtcMinutes * 2 - 1,
+    "Expected BTC-enabled invoice TTL to be extended",
+  );
+
+  const invPendingBtc = await createInvoice({
+    amountUsd: 40,
+    allowedCurrencies: ["BTC"],
+    telegramUserId: null,
+    createdByAdminId: "self-check",
+  });
+  const btcPendingAmount = invPendingBtc.payments.find(
+    (payment) => payment.currency === "BTC",
+  ).expectedAmountCrypto;
+  const btcPendingHash = "a".repeat(64);
+  const pendingConfirm = markPaymentPendingConfirmation({
+    invoiceId: invPendingBtc.id,
+    currency: "BTC",
+    txHash: btcPendingHash,
+    confirmations: 1,
+    paidAmountCrypto: btcPendingAmount,
+  });
+  assert(
+    pendingConfirm.changed === true,
+    "Expected BTC payment to move into pending_confirmation",
+  );
+  assert(
+    pendingConfirm.invoice.status === "pending",
+    "Invoice should remain pending while confirmations are incomplete",
+  );
+  const pendingBtcPayment = pendingConfirm.invoice.payments.find(
+    (payment) => payment.currency === "BTC",
+  );
+  assert(
+    pendingBtcPayment.status === "pending_confirmation",
+    "Expected BTC payment status pending_confirmation",
+  );
+  assert(
+    pendingBtcPayment.txHash === btcPendingHash,
+    "Expected BTC pending confirmation tx hash to be stored",
+  );
 
   const paid1 = markInvoicePaid({
     invoiceId: invA.id,
@@ -154,6 +212,16 @@ async function run() {
     Number(noAmountPayment.paidAmountCrypto) === Number(noAmountPayment.expectedAmountCrypto),
     "Paid amount should default to expected amount when missing",
   );
+
+  const btcConfirmed = markInvoicePaid({
+    invoiceId: invPendingBtc.id,
+    currency: "BTC",
+    txHash: btcPendingHash,
+    confirmations: 2,
+    paidAmountCrypto: btcPendingAmount,
+  });
+  assert(btcConfirmed.changed === true, "Expected BTC pending invoice to confirm");
+  assert(btcConfirmed.invoice.status === "paid", "Expected BTC invoice to become paid");
 
   const body = JSON.stringify({ hello: "world" });
   const signature =

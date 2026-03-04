@@ -43,6 +43,10 @@ module.exports = {
   invoiceTtlMinutes: Number.isFinite(INVOICE_TTL_MINUTES)
     ? INVOICE_TTL_MINUTES
     : 30,
+  btcInvoiceTtlMultiplier: Math.max(
+    1,
+    parseNumber(process.env.BTC_INVOICE_TTL_MULTIPLIER, 2),
+  ),
   autoVerifyPayments: parseBool(process.env.AUTO_VERIFY_PAYMENTS, true),
   verifyIntervalSeconds: parseNumber(process.env.VERIFY_INTERVAL_SECONDS, 45),
   verifierAlertsEnabled: parseBool(process.env.VERIFIER_ALERTS_ENABLED, true),

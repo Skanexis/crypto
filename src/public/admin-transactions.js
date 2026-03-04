@@ -158,6 +158,10 @@
       bulk_deleted: "Eliminazione massiva",
       run: "Esecuzione job",
       run_skipped: "Job saltato",
+      snapshot: "Snapshot rischi",
+      snapshot_clear: "Rischi rientrati",
+      alert_opened: "Rischio aperto",
+      alert_resolved: "Rischio chiuso",
       verified: "Verifica",
     };
     return map[key] || key || "Evento";
@@ -167,9 +171,12 @@
     const key = String(action || "").toLowerCase();
     if (key === "created") return "created";
     if (key === "paid" || key === "confirmed") return "paid";
+    if (key === "snapshot_clear") return "paid";
+    if (key === "alert_opened") return "warn";
+    if (key === "alert_resolved") return "paid";
     if (key === "deleted" || key === "bulk_deleted") return "danger";
     if (key === "expired" || key === "cancelled" || key === "run_skipped") return "warn";
-    if (key === "run" || key === "verified") return "system";
+    if (key === "run" || key === "verified" || key === "snapshot") return "system";
     return "neutral";
   }
 
@@ -178,6 +185,7 @@
     const map = {
       invoice: "Fattura",
       payment: "Transazione",
+      risk: "Rischio",
       system: "Sistema",
     };
     return map[key] || key || "Entita";

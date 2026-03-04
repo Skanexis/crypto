@@ -107,6 +107,34 @@
             <div id="riskAlerts" class="tx-list"></div>
           </div>
 
+          <div class="field">
+            <label>Storico monitor rischi</label>
+            <div id="riskHistoryList" class="log-list"></div>
+          </div>
+
+          <div class="field">
+            <label>Log eventi rischio</label>
+            <div class="toolbar">
+              <select id="riskSeverityFilter" class="select">
+                <option value="all">Tutte le severita</option>
+                <option value="critical">Critici</option>
+                <option value="high">Alti</option>
+                <option value="medium">Medi</option>
+              </select>
+              <select id="riskStateFilter" class="select">
+                <option value="all">Tutti gli stati</option>
+                <option value="active">Solo aperti</option>
+                <option value="resolved">Solo chiusi</option>
+              </select>
+              <input id="riskCodeFilter" class="input" type="text" placeholder="Filtra per codice rischio" />
+              <input id="riskSourceFilter" class="input" type="text" placeholder="Filtra per source" />
+              <button id="riskApplyFiltersBtn" class="btn btn-secondary" type="button">Applica filtri</button>
+              <button id="riskResetFiltersBtn" class="btn btn-ghost" type="button">Reset</button>
+              <button id="riskExportCsvBtn" class="btn btn-secondary" type="button">Esporta CSV</button>
+            </div>
+            <div id="riskEventsList" class="log-list"></div>
+          </div>
+
           <div id="listNotice" class="notice hidden"></div>
         </section>
       </main>
